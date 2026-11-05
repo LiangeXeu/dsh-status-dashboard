@@ -1,6 +1,6 @@
 {
   "name": "dsh-status-dashboard",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": false,
   "type": "module",
   "description": "DeepSeek 运行与热度仪表盘：标题栏状态按钮，三套内置皮肤 + 自定义皮肤（背景图/配色/模块透明度），固定 10 条话题（聚合 ★ + 搜索补足）与公开声量聚合。",
@@ -17,7 +17,7 @@
     "skin",
     "cordis"
   ],
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=22.12.0"
   },
@@ -36,7 +36,8 @@
     "README.md",
     "LICENSE",
     "MARKET.md",
-    "docs"
+    "docs",
+    "NOTICE"
   ],
   "dsh": {
     "bundle": {

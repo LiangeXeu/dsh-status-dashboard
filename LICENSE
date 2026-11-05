@@ -1,21 +1,101 @@
-MIT License
+DSH 仪表盘署名许可 1.0
+DSH Status Dashboard Attribution License 1.0 (DSAL-1.0)
 
-Copyright (c) 2026 dsh-status-dashboard contributors
+Copyright (c) 2026 LiangeXeu
+https://github.com/LiangeXeu/dsh-status-dashboard
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+【重要提示】
+本许可不是 OSI（Open Source Initiative）认可的开源许可，也不是自由软件许可。
+本软件属于“源码公开、保留署名权”的软件：允许使用、修改、分发与商用，但必须遵守下列署名与同许可条件。
+如果你不接受本许可的全部条件，请勿使用、复制、修改或分发本软件。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+一、定义
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. “软件”指本许可随附的源代码、文档、图片、配置与其它文件。
+2. “衍生作品”指基于软件全部或部分内容创作的修改版、扩展版、合并版或其它派生作品。
+3. “分发”指以源代码、二进制、安装包、镜像、托管服务或其它形式向第三方提供软件或衍生作品。
+4. “公开部署”指将软件或衍生作品部署为可被第三方访问的网站、应用、API、插件或服务。
+5. “作者”指版权持有人 LiangeXeu。
+
+二、许可授予
+
+在遵守本许可全部条件的前提下，作者授予你全球范围内、免费、非独占、可终止的许可，允许你：
+1. 使用、复制、修改、合并、发布、分发、再许可和销售软件及衍生作品；
+2. 在内部环境中使用、修改软件，无需对外署名；一旦对外分发或公开部署，则必须遵守第三条。
+
+三、条件
+
+3.1 保留声明
+你必须在软件及衍生作品的全部副本、源代码、文档和安装包中，完整保留本许可、版权声明和 NOTICE 文件，不得删除、改写或隐蔽。
+
+3.2 显著署名
+任何对外分发、公开部署或衍生作品，必须以下列方式显著标注出处：
+(a) 在主要文档（README 或等效的首页文档）中，放置以下文字并保留可点击链接：
+    “基于 LiangeXeu 的《DeepSeek 运行与热度仪表盘》—— https://github.com/LiangeXeu/dsh-status-dashboard”
+(b) 如果衍生作品带有用户界面，还必须在“关于”“致谢”或“许可证”页面中展示同样的文字与链接。
+(c) 修改版必须注明“修改自 LiangeXeu 的《DeepSeek 运行与热度仪表盘》”，不得让第三方误以为是作者原版。
+
+3.3 衍生作品同许可
+你以源代码或二进制形式对外分发衍生作品时，必须让衍生作品整体适用本许可（或取得作者的书面豁免），不得附加额外限制。
+
+3.4 不得规避
+你不得通过技术手段、许可改写、拆分分发等方式规避或削弱本许可的署名与同许可要求。
+
+3.5 不得虚假声称
+你不得虚假声称软件或衍生作品由你原创，不得使用作者姓名、头像或项目名称暗示作者为你的版本背书。
+
+3.6 商标
+本许可不授予任何商标、服务标记或项目名称的使用许可；合理指明出处不受此限。
+
+四、终止
+
+4.1 你违反本许可任何条件时，本许可授予你的全部权利自动终止。
+4.2 如果你在收到作者书面通知后 30 日内完成补救，许可自补救完成之日起恢复；重复违约或故意规避的，作者有权拒绝恢复。
+4.3 许可终止后，你不得继续使用、分发或公开部署软件及衍生作品，但已按许可完成的分发不追溯。
+
+五、免责与责任限制
+
+软件按“现状”提供，不附带任何明示或默示担保，包括但不限于适销性、特定用途适用性和不侵权担保。在适用法律允许的最大范围内，作者不对任何直接、间接、偶然、特殊或后果性损害承担责任。
+
+六、法律适用与争议解决
+
+本许可适用中华人民共和国法律。因本许可引起的争议，由作者住所地有管辖权的人民法院管辖。
+
+七、其它
+
+7.1 本许可不转让版权，作者保留全部未明确授予的权利。
+7.2 本许可的中文与英文版本具有同等效力；如有冲突，以中文版本为准。
+7.3 如本许可任何条款被认定无效，其余条款仍然有效。
+
+---
+
+English translation (for reference; the Chinese version prevails)
+
+DSH Status Dashboard Attribution License 1.0 (DSAL-1.0)
+
+Copyright (c) 2026 LiangeXeu
+https://github.com/LiangeXeu/dsh-status-dashboard
+
+This is a source-available license, NOT an OSI-approved open source license. You may use, modify, distribute and commercialize the software only if you comply with the attribution and share-alike conditions below.
+
+1. Definitions: "Software" means the source code, documentation, images and other files distributed with this license. "Derivative Work" means any modified, extended or combined version. "Distribute" means providing the Software or a Derivative Work to a third party. "Public Deployment" means making it accessible to third parties as a website, app, API, plugin or service.
+
+2. Grant: subject to this license, the author grants you a worldwide, royalty-free, non-exclusive, revocable license to use, copy, modify, merge, publish, distribute, sublicense and sell the Software and Derivative Works. Internal use without distribution does not require public attribution.
+
+3. Conditions:
+3.1 Keep this license, the copyright notice and the NOTICE file in all copies, source code, documentation and packages.
+3.2 Prominent attribution: any distribution, public deployment or Derivative Work must include, in the primary documentation and (if the work has a user interface) in an About/Credits/License screen, the following with a working link:
+    "Based on DeepSeek Status Dashboard by LiangeXeu — https://github.com/LiangeXeu/dsh-status-dashboard"
+    Modified versions must state "Modified from ..." and must not mislead others into thinking the author endorses them.
+3.3 Share-alike: Derivative Works distributed in source or binary form must be licensed as a whole under this license (or with the author's written waiver), without additional restrictions.
+3.4 No circumvention of the attribution or share-alike requirements.
+3.5 No false claim of authorship or endorsement.
+3.6 No trademark license is granted.
+
+4. Termination: rights terminate automatically upon breach; they are reinstated if the breach is cured within 30 days after written notice, except for repeated or willful breaches.
+
+5. Disclaimer: the software is provided "AS IS", without warranties; the author is not liable for damages to the maximum extent permitted by law.
+
+6. Governing law: the laws of the People's Republic of China; disputes are subject to the courts at the author's domicile.
+
+7. The Chinese version prevails over this translation.
