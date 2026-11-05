@@ -1,5 +1,7 @@
 # dsh-status-dashboard
 
+> 插件市场：[DeepSeek Harness Hub](https://deepseek.stream/plugins/dsh-status-dashboard) · [GitHub Releases](https://github.com/LiangeXeu/dsh-status-dashboard/releases)
+
 DeepSeek 运行与热度仪表盘：标题栏右侧一枚按钮，点开是三套内置皮肤 + 自定义皮肤的高密度 HUD，数据点开即刷新。
 
 ![深渊皮肤](docs/skin-abyss.png)
