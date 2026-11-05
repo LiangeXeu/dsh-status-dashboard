@@ -1,0 +1,7 @@
+node_modules/
+*.tgz
+*.zip
+_hub-upload/
+dist/
+.DS_Store
+Thumbs.db

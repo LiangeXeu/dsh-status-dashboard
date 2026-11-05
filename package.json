@@ -1,0 +1,68 @@
+{
+  "name": "dsh-status-dashboard",
+  "version": "0.2.2",
+  "private": false,
+  "type": "module",
+  "description": "DeepSeek 运行与热度仪表盘：标题栏状态按钮，三套内置皮肤 + 自定义皮肤（背景图/配色/模块透明度），固定 10 条话题（聚合 ★ + 搜索补足）与公开声量聚合。",
+  "icon": "assets/icon.svg",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "status",
+    "dashboard",
+    "heat",
+    "sentiment",
+    "theme",
+    "skin",
+    "cordis"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "MARKET.md",
+    "docs"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.2.1-rc.4": "compatible"
+      }
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check client.js && node --check lib/index.js && node --check lib/status.js && node --check lib/heat.js && node --check lib/search.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LiangeXeu/dsh-status-dashboard.git"
+  },
+  "homepage": "https://github.com/LiangeXeu/dsh-status-dashboard#readme",
+  "bugs": {
+    "url": "https://github.com/LiangeXeu/dsh-status-dashboard/issues"
+  },
+  "author": "LiangeXeu"
+}

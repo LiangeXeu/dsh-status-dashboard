@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN" data-windows-titlebar style="--dsh-windows-titlebar-height:40px">
+<head>
+<meta charset="utf-8">
+<title>dsh-status-dashboard · HUD 外观检查</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    --dsw-alias-bg-base: #151517;
+    --dsw-alias-bg-layer-1: #232324;
+    --dsw-alias-bg-layer-2: #2c2c2e;
+    --dsw-alias-bg-layer-3: #353638;
+    --dsw-alias-bg-mask-1: #00000080;
+    --dsw-alias-border-l2: #ffffff1f;
+    --dsw-alias-border-l3: #ffffff29;
+    --dsw-alias-label-primary: #f9fafb;
+    --dsw-alias-label-secondary: #cfd3d6;
+    --dsw-alias-label-tertiary: #adb2b8;
+    --dsw-alias-state-success-primary: #22c55e;
+    --dsw-alias-state-warn-primary: #f59e0b;
+    --dsw-alias-state-error-primary: #f25a5a;
+    --dsw-alias-state-idle-primary: #545557;
+    --dsw-alias-brand-primary: #f9fafb;
+    --dsw-alias-interactive-bg-hover: #ffffff14;
+    --dsw-alias-link: #7aaaff;
+    --dsw-specific-sidebar-fill: #1b1b1c;
+    font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    background: var(--dsw-alias-bg-base);
+    color: var(--dsw-alias-label-primary);
+  }
+  .chrome { position: fixed; inset: 0 0 auto; height: 40px; display: flex; align-items: center; background: #1b1b1c; padding-left: 14px; gap: 18px; color: #adb2b8; font-size: 12px; }
+  .controls { margin-left: auto; display: flex; height: 40px; }
+  .controls span { width: 46px; display: grid; place-items: center; color: #7f858f; font-size: 10px; }
+  .app { position: fixed; inset: 40px 0 0; display: grid; grid-template-columns: 280px 1fr; }
+  .side { background: #1b1b1c; border-right: 1px solid #ffffff0f; padding: 16px; font-size: 13px; color: #cfd3d6; }
+  .center { background: #151517; border-radius: 16px 0 0 0; padding: 28px; color: #adb2b8; font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="chrome"><span>文件</span><span>编辑</span><span>视图</span><div class="controls"><span>—</span><span>▢</span><span>✕</span></div></div>
+  <div class="app"><div class="side">对话<br><br>插件<br>自动化任务<br>上下文洞察</div><div class="center">内容区</div></div>
+  <div id="slot"></div>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script>
+    var params = new URLSearchParams(location.search);
+    var mode = params.get('mode') || 'hud';
+    try { localStorage.setItem('dsh.status.skin', params.get('skin') || 'abyss'); } catch (e) {}
+    try {
+      if (params.get('skin') === 'custom') {
+        localStorage.setItem('dsh.status.custom.v1', JSON.stringify({
+          bg: '#070d12', panel: '#0a1a20', text: '#e8fbff',
+          accent: params.get('accent') || '#34f5c5',
+          image: params.get('bg') || '',
+          modules: {
+            kpi: { image: '', opacity: 0.45 },
+            status: { image: params.get('mod') || '', opacity: 0.35 },
+            trend: { image: '', opacity: 0.55 },
+            heat: { image: '', opacity: 0.72 },
+            topics: { image: '', opacity: 0.5 },
+            feed: { image: '', opacity: 0.72 }
+          }
+        }));
+      }
+    } catch (e) {}
+    document.write('<script src="./fixture-live.js"><\/script>');
+    document.write('<script src="./fixture-heat.js"><\/script>');
+    document.write('<script src="./fixture-ai.js"><\/script>');
+  </script>
+  <script>
+    window.__ModuleLoader__ = {
+      load: function (info) {
+        window.__plugin = info.factory(function (name) {
+          if (name === 'react') return React;
+          throw new Error('unknown module ' + name);
+        });
+      },
+    };
+    window.fetch = function (url) {
+      var isHeat = String(url).indexOf('/heat') >= 0;
+      var isAi = String(url).indexOf('/ai-topics') >= 0;
+      if (isAi) {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, data: window.__AI }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      if (isHeat && String(mode).indexOf('404') >= 0) {
+        return Promise.resolve(new Response(JSON.stringify({ ok: false, error: 'not found' }), { status: 404 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ok: true, data: isHeat ? window.__HEAT : window.__FIXTURE }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+    };
+  </script>
+  <script src="../client.js"></script>
+  <script>
+    var host = document.getElementById('slot');
+    var registered = null;
+    var ctx = {
+      effect: function (fn) { return fn(); },
+      slots: {
+        inject: function (name, gen) { var it = gen(); it.next(); },
+        register: function (spec, Comp) { registered = Comp; return function () {}; },
+      },
+    };
+    window.__plugin.apply(ctx);
+    ReactDOM.createRoot(host).render(React.createElement(registered));
+    setTimeout(function () {
+      var trigger = document.querySelector('.dss-trigger');
+      if (!trigger) return;
+      if (mode.indexOf('hud') === 0 || mode === 'skins' || mode === 'custom-editor') trigger.click();
+      if (mode === 'hover') { var root = document.querySelector('.dss-root'); if (root) root.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); }
+      if (mode === 'custom-editor') {
+        setTimeout(function () {
+          var buttons = document.querySelectorAll('.hud-btn');
+          for (var i = 0; i < buttons.length; i += 1) {
+            if (buttons[i].textContent.indexOf('皮肤') >= 0) { buttons[i].click(); break; }
+          }
+          setTimeout(function () {
+            var cards = document.querySelectorAll('.skin-card');
+            if (cards.length) cards[cards.length - 1].click();
+          }, 500);
+        }, 500);
+      }
+      if (mode === 'skins') {
+        setTimeout(function () {
+          var buttons = document.querySelectorAll('.hud-btn');
+          for (var i = 0; i < buttons.length; i += 1) {
+            if (buttons[i].textContent.indexOf('皮肤') >= 0) { buttons[i].click(); break; }
+          }
+        }, 900);
+      }
+    }, 600);
+  </script>
+</body>
+</html>

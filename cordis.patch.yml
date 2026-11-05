@@ -1,0 +1,5 @@
+# dsh-status-dashboard 的 bundle patch：把插件行挂进 DSH 配置树。
+- insert:
+    - id: dsh-status-dashboard
+      name: dsh-status-dashboard
+      config: {}

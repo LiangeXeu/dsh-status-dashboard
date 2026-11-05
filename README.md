@@ -1,0 +1,94 @@
+# dsh-status-dashboard
+
+DeepSeek 运行与热度仪表盘：标题栏右侧一枚按钮，点开是三套内置皮肤 + 自定义皮肤的高密度 HUD，数据点开即刷新。
+
+![深渊皮肤](docs/skin-abyss.png)
+
+## 0.2.2 正式版
+
+- **运行与热度 HUD**：官方状态页（7 个组件、90 天可用率、逐日色块、事故时间线）+ 公开提及聚合（HN、GitHub、IT之家/量子位/Solidot/开源中国）的声量、情绪、热度与信息流；
+- **固定 10 条话题**：聚合话题占前 1–6 条并用 ★ 标记，其余由 DSH 账号搜索补足到 10 条；每次打开/刷新重新查询、重新排序，点击偏好按次数加权；
+- **四套皮肤**：深渊 / 终端 / 纸面 + 自定义；自定义支持全局与 6 个模块的背景图、模块透明度，以及背景/面板/文字/主色/警告/故障六组颜色；
+- **视觉系统**：8px 栅格、5 级字号、颜色全部走 token（含状态色与 partial），趋势图响应式适配容器，HoverCard 跟随当前皮肤，移除面板 accent 条与 KPI 渐变，减弱光晕/扫描线，话题列表去虚线；
+- **可靠性**：全源失败回退上次完整快照并标 `stale`，部分失败不覆盖完整快照；`force+hard` 真正全量刷新；输入框快捷键守卫；搜索结果 URL 白名单；搜索 35s 总预算与空结果回退；`/health` 暴露源快照，`/ai-topics` 3s 限流；
+- **工程**：8 个 `node:test` 离线用例（解析、聚合回退、路由、搜索降级、情绪词），`npm test` / `npm run check`，MARKET.md 上架清单，版本 `0.2.2`。
+
+![深渊皮肤](docs/skin-abyss.png)
+
+![自定义编辑器](docs/custom-editor.png)
+
+## 功能
+
+- **运行**：官方状态页总体状态、7 个组件、90 天可用率、逐日色块（每格 1 天，颜色为当日最差状态）、事故时间线；
+- **热度**：公开提及聚合——24h 声量、2h 速度、热度指数、情绪估算、来源分布；
+- **话题推荐**：点开面板即强制刷新，按关键词聚类出 Top 话题，点击跳转原帖；
+- **实时信息流**：按「互动 × 新鲜度」排序，带来源徽标与时间；
+- **皮肤**：深渊 / 终端 / 纸面 / 自定义，右上角「◐ 皮肤」切换，按 1/2/3 切换前三套，选择持久化；
+- **响应式**：1280×719 自动压缩间距；遵循 `prefers-reduced-motion`。
+
+## 数据来源与口径
+
+| 层 | 来源 | 刷新 |
+| --- | --- | --- |
+| 官方状态 | https://status.deepseek.com （解析首屏 RSC 数据） | 60s 缓存 |
+| 公开提及 | Hacker News（Algolia）、GitHub Issues、IT之家 / 量子位 / Solidot / 开源中国 RSS | 聚合 60s，单源 15 分钟；点开/刷新用 `hard=1` 全量刷新；宿主每 10 分钟预热 |
+| AI 话题 | DSH 账号 token + DeepSeek 官方 Search API（无需 API key；拿不到 token 时回退 `ctx.web`） | 每次打开/刷新一次，无缓存 |
+
+边界：
+
+- **情绪是词表估算**，不是模型判断，只作趋势参考；
+- 中文社媒（微博/知乎/小红书）没有稳定公开接口，不接；
+- 热度曲线依赖缓存积累，冷启动第一次打开可能需要几秒；
+- 全源失败时展示上次快照并标「缓存快照」，不会把热度归零；部分源失败时保留完整快照；
+- 状态页改版会打断 RSC 解析，届时退回上次快照并标 `stale`；
+- 自定义皮肤图片存在浏览器 `localStorage`，换设备/清缓存会丢失；不上传任何服务器；
+- **AI 搜索每次打开会发起一次真实检索**：用 DSH 已登录的 DeepSeek 账号 token 调官方 Search API，不消耗模型轮次；只有账号 token 不可用而回退到 `ctx.web` 时，才可能走 Messages 搜索并消耗一个模型轮次；
+- 点击偏好只用于轮换查询词，不发送给任何第三方。
+
+## 路由
+
+宿主在 `/dsh-status-2417` 下提供：
+
+- `GET /summary`：官方状态摘要；
+- `GET /heat`：热度聚合（声量、情绪、话题、信息流、源健康）；
+- `GET /ai-topics?seed=&interests=`：DeepSeek 搜索 AI 话题（每次调用重查）；
+- `GET /health`：存活检查；
+- `?force=1` 跳过聚合缓存；`?hard=1` 连单源缓存一起跳过。
+
+为什么需要宿主：状态页与多数新闻源不带 `Access-Control-Allow-Origin`，浏览器直接 fetch 会被 CORS 拦掉；宿主在 Node 里取，页面只请求同源路由。
+
+## 皮肤契约
+
+三套内置皮肤共用同一棵组件树，只换 `--h-*` CSS 变量；自定义皮肤在此之上用运行时变量与逐模块内联背景：
+
+```js
+// 内置
+{ id, name, en, tagline, preview: { bg, panel, line, accent, text } }
+// 自定义（localStorage: dsh.status.custom.v1）
+{ bg, panel, text, accent, image, modules: { status: { image, opacity }, ... } }
+```
+
+模块 id：`kpi` / `status` / `trend` / `heat` / `topics` / `feed`。
+
+## 安装
+
+- 本地：`install.ps1` 复制到 `C:\DSH-NEXT-Lab\plugins\dsh-status-dashboard\<version>`、建 junction、写入 profile；
+- 市场：安装后重启 DSH（宿主插件只在启动时挂载）。
+
+## 测试
+
+```sh
+npm test   # node --test：解析 / 聚合回退 / 路由 / 搜索降级 / 情绪词
+npm run check
+```
+
+## 开发
+
+```sh
+# 本地外观检查（不启动 DSH）
+python -m http.server 5811 --bind 127.0.0.1
+# 浏览器打开 http://127.0.0.1:5811/dev/harness.html?mode=hud&skin=abyss
+# 自定义：?mode=custom-editor&skin=custom
+```
+
+`dev/` 只用于开发与截图，不随包发布（`files` 白名单已排除）。
