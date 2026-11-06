@@ -37,6 +37,10 @@ test('全部源失败时回退上次完整快照', async () => {
   const first = await getHeat({ hard: true, force: true });
   assert.ok(first.counts.items > 0);
   assert.equal(first.stale, false);
+  assert.ok(first.feed.every((item) => typeof item.sourceId === 'string'));
+  assert.ok(Array.isArray(first.hnFeed));
+  assert.ok(first.hnFeed.every((item) => item.sourceId === 'hn'));
+  assert.ok(first.feed.some((item) => item.sourceId === 'github'));
 
   globalThis.fetch = async () => { throw new Error('network down'); };
   const second = await getHeat({ hard: true, force: true });

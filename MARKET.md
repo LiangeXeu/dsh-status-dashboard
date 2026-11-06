@@ -1,4 +1,4 @@
-# 上架清单（0.2.4）
+# 上架清单（0.3.0 Alpha）
 
 这份文件是给插件市场/仓库发布用的检查表，不参与运行时加载。
 
@@ -7,7 +7,7 @@
 | 字段 | 值 | 状态 |
 | --- | --- | --- |
 | name | `dsh-status-dashboard` | ✅ |
-| version | `0.2.4` | ✅ |
+| version | `0.3.0-alpha.1` | ⏳ 待发布 |
 | description | 中文一句话，见 package.json | ✅ |
 | icon | `assets/icon.svg`（64×64，346 B） | ✅ |
 | license | 自定义：DSH 仪表盘署名许可 1.0（`LICENSE`，非 OSI 开源） | ✅ |
@@ -15,12 +15,12 @@
 | dsh.bundle.patch | `./cordis.patch.yml`，entry id = `dsh-status-dashboard` | ✅ |
 | dsh.client | `platform: web`，`inject: []` | ✅ |
 | dsh.compatibility | `0.2.1-rc.4: compatible` | ⚠️ 上架前核对当前发布版本 |
-| repository / homepage | 未填写 | ⚠️ 需要仓库地址 |
+| repository / homepage | `LiangeXeu/dsh-status-dashboard` | ✅ |
 | private | `false` | ✅ |
 
 ## 2. 产物与文件
 
-- `lib/index.js`、`lib/status.js`、`lib/heat.js`、`client.js`、`cordis.patch.yml`、`assets/icon.svg`、`README.md`、`LICENSE`、`docs/*.png`；
+- `lib/index.js`、`lib/status.js`、`lib/heat.js`、`lib/search.js`、`lib/plugin-feed.js`、`client.js`、`cordis.patch.yml`、`assets/icon.svg`、`README.md`、`LICENSE`、`docs/*.png`；
 - `files` 白名单已排除 `dev/`、`test/`、`install.ps1`、`restart-dsh-status.cmd`；
 - 无构建步骤（纯 JS），`npm pack` 后可直接被 DSH 加载。
 
@@ -34,6 +34,7 @@
 | `docs/skin-library.png` | 皮肤库 |
 | `docs/custom-editor.png` | 自定义编辑器 |
 | `docs/custom-skin.png` | 自定义背景效果 |
+| `docs/feed-github.png` | GitHub 插件流 |
 | `docs/hover-card.png` | 标题栏悬停卡 |
 | `docs/ai-topics.png` | 聚合 + AI 搜索话题 |
 

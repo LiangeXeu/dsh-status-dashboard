@@ -10,6 +10,7 @@
   'use strict';
 
   var PACKAGE = 'dsh-status-dashboard';
+  var VERSION = '0.3.0-alpha.1';
   var ROUTE_SEGMENT = '/dsh-status-2417';
   var SKIN_KEY = 'dsh.status.skin';
 
@@ -43,7 +44,7 @@
 
   var CUSTOM_KEY = 'dsh.status.custom.v1';
   var CUSTOM_DEFAULT = {
-    bg: '#05090b', panel: '#0b1d20', text: '#dcfff4', accent: '#34f5c5', warn: '#ffd166', bad: '#ff5d7a', image: '',
+    bg: '#05090b', panel: '#0b1d20', text: '#dcfff4', accent: '#34f5c5', ok: '#34f5c5', warn: '#ffd166', bad: '#ff5d7a', image: '',
     modules: {
       kpi: { image: '', opacity: 0.45 },
       status: { image: '', opacity: 0.62 },
@@ -86,7 +87,7 @@
   function mergeCustom(raw) {
     var out = JSON.parse(JSON.stringify(CUSTOM_DEFAULT));
     if (!raw || typeof raw !== 'object') return out;
-    ['bg', 'panel', 'text', 'accent', 'warn', 'bad', 'image'].forEach(function (key) {
+    ['bg', 'panel', 'text', 'accent', 'ok', 'warn', 'bad', 'image'].forEach(function (key) {
       if (typeof raw[key] === 'string') out[key] = raw[key];
     });
     if (raw.modules && typeof raw.modules === 'object') {
@@ -105,6 +106,97 @@
     catch (error) { return mergeCustom(null); }
   }
 
+  var CUSTOM_STORE_KEY = 'dsh.status.customStore.v1';
+  var CUSTOM_STORE_LIMIT = 4_200_000;
+
+  function newPresetId() {
+    return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  function normalizePreset(raw, index) {
+    var source = raw && typeof raw === 'object' ? raw : {};
+    var config = source.config && typeof source.config === 'object' ? source.config : source;
+    return {
+      id: String(source.id || newPresetId()),
+      name: String(source.name || ('自定义 ' + (index + 1))).trim().slice(0, 24) || ('自定义 ' + (index + 1)),
+      config: mergeCustom(config),
+      updatedAt: Number(source.updatedAt) || Date.now(),
+    };
+  }
+
+  function loadCustomStore() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(CUSTOM_STORE_KEY) || 'null');
+      if (raw && Array.isArray(raw.presets) && raw.presets.length) {
+        var presets = raw.presets.map(normalizePreset);
+        var active = presets.some(function (item) { return item.id === raw.activeId; }) ? raw.activeId : presets[0].id;
+        return { activeId: active, presets: presets };
+      }
+    } catch (error) { /* 损坏则回退到迁移逻辑 */ }
+    var legacy = null;
+    try { legacy = JSON.parse(localStorage.getItem(CUSTOM_KEY) || 'null'); } catch (error) { legacy = null; }
+    var first = normalizePreset({
+      id: 'preset-' + Date.now().toString(36),
+      name: legacy ? '我的自定义' : '默认自定义',
+      config: legacy,
+      updatedAt: Date.now(),
+    }, 0);
+    return { activeId: first.id, presets: [first] };
+  }
+
+  function saveCustomStore(store) {
+    var text = JSON.stringify(store);
+    if (text.length > CUSTOM_STORE_LIMIT) {
+      try { window.alert('自定义皮肤总大小超过约 4MB，未保存。请减少模块背景图数量或换更小的图。'); } catch (error) {}
+      return false;
+    }
+    try { localStorage.setItem(CUSTOM_STORE_KEY, text); return true; }
+    catch (error) {
+      console.warn('[dsh-status] 自定义皮肤保存失败', error);
+      try { window.alert('自定义皮肤保存失败：浏览器存储已满。请减少背景图后再试。'); } catch (ignored) {}
+      return false;
+    }
+  }
+
+  function activePresetOf(store) {
+    if (!store || !Array.isArray(store.presets) || !store.presets.length) return null;
+    return store.presets.filter(function (item) { return item.id === store.activeId; })[0] || store.presets[0];
+  }
+
+  function downloadPresets(store) {
+    try {
+      var text = JSON.stringify({ app: 'dsh-status-dashboard', version: 1, exportedAt: new Date().toISOString(), presets: store.presets }, null, 2);
+      var blob = new Blob([text], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = 'dsh-status-skins-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    } catch (error) {
+      window.alert('导出失败：' + (error && error.message ? error.message : error));
+    }
+  }
+
+  function importPresetFile(file, done) {
+    if (!file) return;
+    if (file.size > 6_000_000) { window.alert('导入文件太大（上限 6MB）'); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var raw = JSON.parse(String(reader.result || ''));
+        var list = Array.isArray(raw) ? raw : raw && Array.isArray(raw.presets) ? raw.presets : null;
+        if (!list || !list.length) throw new Error('文件里没有皮肤方案');
+        done(list.map(normalizePreset));
+      } catch (error) {
+        window.alert('导入失败：' + (error && error.message ? error.message : error));
+      }
+    };
+    reader.readAsText(file);
+  }
+
   function customVars(custom) {
     return {
       '--h-bg': custom.bg,
@@ -116,7 +208,7 @@
       '--h-mute': mix(custom.text, custom.bg, 0.3),
       '--h-accent': custom.accent,
       '--h-accent2': mix(custom.accent, '#39b7ff', 0.55),
-      '--h-ok': custom.accent,
+      '--h-ok': custom.ok || custom.accent,
       '--h-warn': custom.warn || '#ffd166',
       '--h-bad': custom.bad || '#ff5d7a',
       '--h-partial': mix(custom.warn || '#ffd166', custom.bad || '#ff5d7a', 0.55),
@@ -175,6 +267,17 @@
     return { background: base };
   }
 
+  function pickJsonFile(done) {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = function () {
+      var file = input.files && input.files[0];
+      if (file) done(file);
+    };
+    input.click();
+  }
+
   function pickImage(done) {
     var input = document.createElement('input');
     input.type = 'file';
@@ -187,15 +290,15 @@
       reader.onload = function () {
         var img = new Image();
         img.onload = function () {
-          var max = 1600;
+          var max = 1280;
           var scale = Math.min(1, max / Math.max(img.width, img.height));
           var canvas = document.createElement('canvas');
           canvas.width = Math.max(1, Math.round(img.width * scale));
           canvas.height = Math.max(1, Math.round(img.height * scale));
           canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          var data = canvas.toDataURL('image/jpeg', 0.82);
-          if (data.length > 2_600_000) data = canvas.toDataURL('image/jpeg', 0.6);
-          if (data.length > 3_500_000) { window.alert('图片压缩后仍然过大，换一张小一点的'); return; }
+          var data = canvas.toDataURL('image/jpeg', 0.78);
+          if (data.length > 1_200_000) data = canvas.toDataURL('image/jpeg', 0.6);
+          if (data.length > 1_800_000) { window.alert('图片压缩后仍然过大（上限约 1.8MB），换一张小一点的'); return; }
           done(data);
         };
         img.src = reader.result;
@@ -246,6 +349,59 @@
     catch (error) { return []; }
   }
 
+  var PREF_STOP = new Set(['deepseek','the','and','for','with','from','this','that','have','will','are','was','were','not','but','you','your','our','they','their','its','has','had','can','may','new','now','how','why','what','when','who','all','one','two','get','got','use','using','into','over','after','before','about','more','than','then','also','just','like','said','says']);
+  var PREF_ZH_STOP = new Set(['我们','你们','他们','这个','那个','一个','没有','可以','就是','什么','已经','还是','因为','所以','但是','如果','以及','并且','而且','进行','通过','对于','关于','目前','现在','今天','昨天','明天','表示','认为','相关','消息','报道','记者','编辑','来源','标题']);
+
+  function readPreferenceProfile() {
+    var weights = new Map();
+    function addText(text, weight) {
+      var lower = String(text || '').toLowerCase();
+      var words = lower.match(/[a-z][a-z0-9.+-]{2,}/g) || [];
+      words.forEach(function (word) {
+        if (PREF_STOP.has(word)) return;
+        weights.set(word, (weights.get(word) || 0) + weight);
+      });
+      var runs = lower.match(/[一-龥]{2,}/g) || [];
+      runs.forEach(function (run) {
+        if (run.length <= 4 && !PREF_ZH_STOP.has(run)) weights.set(run, (weights.get(run) || 0) + weight);
+        for (var i = 0; i < run.length - 1; i += 1) {
+          var bigram = run.slice(i, i + 2);
+          if (PREF_ZH_STOP.has(bigram)) continue;
+          weights.set(bigram, (weights.get(bigram) || 0) + weight * 0.35);
+        }
+      });
+    }
+    readInterestEntries().forEach(function (entry) {
+      addText(entry.label, Math.min(3, Number(entry.count) || 1));
+    });
+    readReads().forEach(function (entry) {
+      addText(entry.label, (Number(entry.weight) || 0.3) * 1.4);
+    });
+    return Array.from(weights.entries())
+      .sort(function (a, b) { return b[1] - a[1]; })
+      .slice(0, 70)
+      .map(function (pair) { return { token: pair[0], weight: pair[1] }; });
+  }
+
+  function preferenceScore(item, profile) {
+    if (!profile.length) return 0;
+    var text = (String(item.title || '') + ' ' + String(item.snippet || '')).toLowerCase();
+    var score = 0;
+    for (var i = 0; i < profile.length; i += 1) {
+      if (text.indexOf(profile[i].token) >= 0) score += profile[i].weight;
+    }
+    return score;
+  }
+
+  function rankByPreference(items, profile) {
+    if (!profile.length) return items;
+    return items.map(function (item, index) {
+      return { item: item, index: index, score: preferenceScore(item, profile) };
+    }).sort(function (a, b) {
+      return (a.item.bucket || 0) - (b.item.bucket || 0) || b.score - a.score || a.index - b.index;
+    }).map(function (row) { return row.item; });
+  }
+
   function finalizePendingRead() {
     if (getConsent() !== 'granted') return;
     try {
@@ -265,13 +421,14 @@
 
   function trackRead(label) {
     if (getConsent() !== 'granted') return;
+    finalizePendingRead();
     try { localStorage.setItem(PENDING_KEY, JSON.stringify({ label: String(label || '').slice(0, 40), startedAt: Date.now() })); }
     catch (error) {}
   }
 
   function rememberInterest(label) {
     if (getConsent() !== 'granted') return;
-    var text = String(label || '').trim().slice(0, 24);
+    var text = String(label || '').trim().slice(0, 40);
     if (!text) return;
     try {
       var map = new Map();
@@ -292,6 +449,7 @@
 
   if (typeof window !== 'undefined') {
     window.addEventListener('focus', finalizePendingRead);
+    window.addEventListener('pagehide', finalizePendingRead);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) finalizePendingRead(); });
     finalizePendingRead();
   }
@@ -410,6 +568,7 @@
     '.hud:after{content:"";pointer-events:none;position:absolute;inset:0;background:repeating-linear-gradient(0deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px);opacity:.22;mix-blend-mode:overlay}',
     '.hud[data-skin="paper"]:after{display:none}',
     '.hud[data-skin="console"]:after{opacity:.14}',
+    '.hud[data-skin="custom"]:after{display:none}',
     '.hud-top{position:relative;z-index:2;display:flex;align-items:center;gap:14px;padding:16px 20px 12px;border-bottom:1px solid var(--h-line)}',
     '.hud-brand{display:flex;align-items:baseline;gap:8px;letter-spacing:.08em;font-size:11px;color:var(--h-dim)}',
     '.hud-brand b{color:var(--h-text);font-size:14px;font-weight:650;letter-spacing:.2em}',
@@ -490,7 +649,15 @@
     '.feed-main{min-width:0;flex:1}',
     '.feed-title{font-size:11px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
     '.feed-meta{font-size:9px;color:var(--h-mute);margin-top:2px;display:flex;gap:8px}',
-    '.hud-foot{position:relative;z-index:2;display:flex;align-items:center;gap:12px;padding:0 18px 10px;font-size:9px;color:var(--h-mute)}',
+    '.feed-head{gap:6px}',
+    '.feed-tabs{flex:0 0 auto}',
+    '.feed-tabs button{padding:2px 6px}',
+    '.feed-count{font-size:9px;color:var(--h-mute);white-space:nowrap}',
+    '.feed-desc{font-size:9px;line-height:1.35;color:var(--h-dim);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
+    '.feed-plugin .feed-title{font-weight:600}',
+    '.feed-note{margin:2px 0 4px;font-size:9px;color:var(--h-warn)}',
+    '.hud-version{color:var(--h-mute);font-variant-numeric:tabular-nums}',
+    '.hud-foot{position:relative;z-index:2;display:flex;align-items:center;flex-wrap:wrap;row-gap:4px;gap:12px;padding:0 18px 10px;font-size:9px;color:var(--h-mute)}',
     '.hud-foot .spacer{flex:1}',
     '.hud-foot i{width:4px;height:4px;border-radius:50%;display:inline-block;margin-right:4px;background:var(--h-ok)}',
     '.hud-foot i[data-off="true"]{background:var(--h-bad)}',
@@ -498,14 +665,14 @@
     '.topic-time{font-size:9px;color:var(--h-mute);font-variant-numeric:tabular-nums;white-space:nowrap}',
     '.topic-new{font-size:9px;color:var(--h-accent);border:1px solid var(--h-line2);border-radius:3px;padding:0 3px;line-height:1.4}',
     '.consent-mask{position:absolute;inset:0;z-index:9;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45);backdrop-filter:blur(3px)}',
-    '.consent-card{width:min(440px,100%);max-height:82%;overflow:auto;padding:18px;border:1px solid var(--h-line2);border-radius:12px;background:var(--h-panel);box-shadow:0 24px 60px rgba(0,0,0,.45)}',
+    '.consent-card{width:min(440px,100%);max-height:82%;overflow:auto;padding:18px;border:1px solid var(--h-line2);border-radius:12px;background:var(--h-bg);box-shadow:0 24px 60px rgba(0,0,0,.45)}',
     '.consent-title{font-size:14px;font-weight:650;margin-bottom:8px}',
     '.consent-note{font-size:11px;line-height:1.6;color:var(--h-dim)}',
     '.consent-list{margin:8px 0;padding-left:16px;font-size:10.5px;line-height:1.7;color:var(--h-dim)}',
     '.consent-more{align-self:flex-start;background:none;border:0;color:var(--h-accent);font-size:10px;cursor:pointer;padding:0}',
     '.consent-detail{margin:8px 0;padding:8px;border:1px solid var(--h-line);border-radius:6px;font-size:10px;line-height:1.7;color:var(--h-mute)}',
     '.consent-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}',
-    '.skin-drawer{position:absolute;top:0;right:0;bottom:0;width:340px;z-index:6;display:flex;flex-direction:column;gap:9px;padding:16px 14px;border-left:1px solid var(--h-line2);background:color-mix(in srgb,var(--h-bg) 92%,transparent);backdrop-filter:blur(14px);animation:hud-slide .18s ease-out}',
+    '.skin-drawer{position:absolute;top:0;right:0;bottom:0;width:340px;z-index:6;display:flex;flex-direction:column;gap:9px;padding:16px 14px;overflow-y:auto;border-left:1px solid var(--h-line2);background:color-mix(in srgb,var(--h-bg) 92%,transparent);backdrop-filter:blur(14px);animation:hud-slide .18s ease-out}',
     '@keyframes hud-slide{from{transform:translateX(18px);opacity:0}to{transform:none;opacity:1}}',
     '.skin-title{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--h-dim)}',
     '.skin-card{display:flex;gap:10px;align-items:center;padding:9px;border:1px solid var(--h-line);border-radius:calc(var(--h-radius) - 4px);cursor:pointer;transition:border-color .15s,background .15s}',
@@ -518,6 +685,14 @@
     '.skin-name em{font-style:normal;font-size:9px;color:var(--h-mute);margin-left:5px;letter-spacing:.1em}',
     '.skin-tag{font-size:9px;color:var(--h-dim);margin-top:2px}',
     '.skin-foot{margin-top:auto;font-size:9px;line-height:1.5;color:var(--h-mute);border-top:1px solid var(--h-line);padding-top:8px}',
+    '.skin-sec-title{margin-top:6px;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--h-mute)}',
+    '.skin-new{border-style:dashed;color:var(--h-dim)}',
+    '.skin-new-plus{width:64px;height:44px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;border:1px dashed var(--h-line2);border-radius:6px;font-size:20px;color:var(--h-accent)}',
+    '.skin-new:hover .skin-new-plus{border-color:var(--h-accent)}',
+    '.cust-preset{display:flex;gap:6px}',
+    '.cust-select{flex:0 0 118px;height:24px;border:1px solid var(--h-line);border-radius:5px;background:var(--h-bg);color:var(--h-text);font-size:10px}',
+    '.cust-actions{display:flex;flex-wrap:wrap;gap:5px}',
+    '.cust-actions .cust-btn{flex:1 1 auto}',
     '.cust-thumb{height:46px;border-radius:6px;border:1px solid var(--h-line);background-size:cover;background-position:center;margin:6px 0 2px}',
     '.dss-heat{display:flex;align-items:center;gap:0;margin:6px 0 8px;padding:6px 8px;border-radius:7px;background:color-mix(in srgb,var(--h-accent) 7%,transparent);border:1px solid var(--h-line)}',
     '.dss-heat-label{font-size:9px;letter-spacing:.08em;color:var(--h-dim)}',
@@ -554,11 +729,11 @@
     '.cust-note{font-size:9px;line-height:1.55;color:var(--h-mute)}',
     '.topic-sep{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0 1px;padding-top:4px;border-top:1px solid var(--h-line2);font-size:9px;letter-spacing:.12em;color:var(--h-mute);text-transform:uppercase}',
     '.topic-ai{padding:4px 2px}',
-    '.topic-star{color:inherit;margin-right:6px;font-size:10px;opacity:.7}',
+    '.topic-star{color:inherit;margin-right:6px;font-size:10px;opacity:1}',
     '.topic-ai .topic-label{font-weight:500;font-size:11px}',
     '.topic-ai .topic-sample{color:var(--h-mute)}',
     '.ai-badge{display:inline-block;font-size:9px;letter-spacing:.08em;padding:1px 4px;border:1px solid var(--h-line2);border-radius:3px;color:var(--h-accent)}',
-    '@media (max-height:780px){.hud-top{padding:10px 14px 8px}.hud-kpis{padding:9px 14px;gap:8px}.kpi{padding:7px 9px 6px}.kpi-value{font-size:19px}.hud-body{padding:0 14px 8px;gap:9px}.hud-main{gap:9px}.hud-bottom{gap:9px}.comp-row{padding:2px 0 1px}.comp-name{font-size:10px}.comp-bars{height:4px}.comp-note{display:none}.p-head{padding:7px 10px 4px}.p-body{padding:0 10px 6px}.topic{padding:4px 2px}.feed-row{padding:4px 2px}.topic-note{display:none}}',
+    '@media (max-height:780px){.hud-top{padding:10px 14px 8px}.hud-kpis{padding:9px 14px;gap:8px}.kpi{padding:7px 9px 6px}.kpi-value{font-size:19px}.hud-body{padding:0 14px 8px;gap:9px}.hud-main{gap:9px}.hud-bottom{gap:9px}.comp-row{padding:2px 0 1px}.comp-name{font-size:10px}.comp-bars{height:4px}.comp-note{display:none}.p-head{padding:7px 10px 4px}.p-body{padding:0 10px 6px}.topic{padding:4px 2px}.feed-row{padding:4px 2px}.topic-note{display:block}}',
     '@media (max-width:900px){.hud-kpis{grid-template-columns:repeat(3,1fr)}.hud-main{grid-template-columns:1fr 1fr}.hud-main .p:last-child{display:none}.hud-bottom{grid-template-columns:1fr}}',
     '@media (prefers-reduced-motion: reduce){.hud *,.hud *:before,.hud *:after{animation:none!important;transition:none!important}.hud-backdrop,.skin-drawer{backdrop-filter:none}}',
   ].join('\n');
@@ -636,28 +811,112 @@
     }
 
     function useAiTopics() {
-      var tuple = useState({ data: null, error: null, loading: false });
+      var tuple = useState({ data: null, error: null, loading: false, limited: false });
       var state = tuple[0];
       var setState = tuple[1];
       var abort = useRef(null);
-      var load = useCallback(function (seed) {
+      var lastOk = useRef(0);
+      var hasData = useRef(false);
+      var retry = useRef(0);
+
+      var load = useCallback(function (seed, force) {
+        // 宿主 3 秒限流：自动刷新时刚成功过就复用；手动刷新允许强制重试。
+        if (!force && hasData.current && Date.now() - lastOk.current < 3000) return;
         if (abort.current) abort.current.abort();
+        clearTimeout(retry.current);
         var controller = new AbortController();
         abort.current = controller;
-        setState({ data: null, error: null, loading: true });
+        setState(function (prev) {
+          return { data: prev.data, error: null, loading: prev.data === null, limited: false };
+        });
         var url = ROUTE_PATH + '/ai-topics?seed=' + encodeURIComponent(String(seed || Date.now()));
         fetch(url, { headers: { accept: 'application/json' }, signal: controller.signal, cache: 'no-store' })
           .then(function (response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-            return response.json();
+            return response.text().then(function (text) {
+              var payload = null;
+              try { payload = JSON.parse(text); } catch (error) { payload = null; }
+              if (!response.ok) {
+                var failure = new Error((payload && payload.error) || ('HTTP ' + response.status));
+                failure.status = response.status;
+                failure.retryAfterMs = payload && payload.retryAfterMs;
+                throw failure;
+              }
+              return payload;
+            });
           })
           .then(function (payload) {
-            if (!payload || payload.ok !== true || !payload.data) throw new Error((payload && payload.error) || 'bad payload');
-            setState({ data: payload.data, error: null, loading: false });
+            if (!payload || payload.ok !== true || !payload.data) throw new Error((payload && payload.error) || '数据格式异常');
+            lastOk.current = Date.now();
+            hasData.current = true;
+            setState({ data: payload.data, error: null, loading: false, limited: false });
           })
           .catch(function (error) {
-            if (error && error.name === 'AbortError') return;
-            setState({ data: null, error: String((error && error.message) || error), loading: false });
+            if (!error || error.name === 'AbortError') return;
+            var message = String(error.message || error);
+            var limited = error.status === 429 || /频繁/.test(message);
+            if (hasData.current) {
+              // 有旧结果就保留，别让一次限流把整列话题清空。
+              setState(function (prev) { return { data: prev.data, error: null, loading: false, limited: limited }; });
+            } else {
+              setState({ data: null, error: limited ? '搜索太频繁，稍后自动重试' : message, loading: false, limited: limited });
+            }
+            if (limited) {
+              var wait = Math.max(1200, Math.min(5000, Number(error.retryAfterMs) || 3200));
+              retry.current = setTimeout(function () { load(String(seed) + '-r', true); }, wait);
+            }
+          });
+      }, []);
+      useEffect(function () {
+        return function () {
+          clearTimeout(retry.current);
+          if (abort.current) abort.current.abort();
+        };
+      }, []);
+      return { state: state, load: load };
+    }
+
+    function useGithubPlugins() {
+      var tuple = useState({ data: null, error: null, loading: false, stale: false, fetchedAt: 0 });
+      var state = tuple[0];
+      var setState = tuple[1];
+      var abort = useRef(null);
+      var dataRef = useRef(null);
+      var fetchedRef = useRef(0);
+
+      var load = useCallback(function (force) {
+        if (!force && dataRef.current && Date.now() - fetchedRef.current < 5 * 60_000) return;
+        if (!force && dataRef.current) force = true;
+        if (abort.current) abort.current.abort();
+        var controller = new AbortController();
+        abort.current = controller;
+        setState(function (prev) {
+          return { data: prev.data, error: null, loading: prev.data === null, stale: prev.stale, fetchedAt: prev.fetchedAt };
+        });
+        fetch(ROUTE_PATH + '/github-plugins' + (force ? '?force=1' : ''), {
+          headers: { accept: 'application/json' },
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+          .then(function (response) {
+            return response.text().then(function (text) {
+              var payload = null;
+              try { payload = JSON.parse(text); } catch (error) { payload = null; }
+              if (!response.ok) throw new Error((payload && payload.error) || ('HTTP ' + response.status));
+              return payload;
+            });
+          })
+          .then(function (payload) {
+            if (!payload || payload.ok !== true || !payload.data) throw new Error((payload && payload.error) || '数据格式异常');
+            dataRef.current = payload.data;
+            fetchedRef.current = Date.now();
+            setState({ data: payload.data, error: null, loading: false, stale: false, fetchedAt: fetchedRef.current });
+          })
+          .catch(function (error) {
+            if (!error || error.name === 'AbortError') return;
+            var message = String(error.message || error);
+            setState(function (prev) {
+              return { data: prev.data, error: prev.data ? null : message, loading: false, stale: Boolean(prev.data), fetchedAt: prev.fetchedAt };
+            });
           });
       }, []);
       useEffect(function () { return function () { if (abort.current) abort.current.abort(); }; }, []);
@@ -759,60 +1018,77 @@
       );
     }
 
+    function skinPreview(preview) {
+      return h('div', { className: 'skin-prev', style: { background: preview.bg, border: '1px solid ' + preview.line } },
+        h('i', { style: { left: '8px', height: '16px', background: preview.accent } }),
+        h('i', { style: { left: '18px', height: '26px', background: preview.accent, opacity: '.55' } }),
+        h('i', { style: { left: '28px', height: '10px', background: preview.text, opacity: '.35' } }),
+        h('i', { style: { left: '38px', height: '21px', background: preview.accent, opacity: '.8' } }),
+        h('i', { style: { left: '48px', height: '13px', background: preview.accent, opacity: '.4' } }),
+        h('span', { style: { position: 'absolute', right: '5px', top: '4px', width: '5px', height: '5px', borderRadius: '50%', background: preview.accent } }),
+      );
+    }
+
     function SkinDrawer(props) {
       var skin = props.skin;
       var onPick = props.onPick;
       var onClose = props.onClose;
-      var custom = props.custom;
+      var store = props.store;
       var onEditCustom = props.onEditCustom;
-      var customPreview = { bg: custom.bg, line: alpha(custom.accent, 0.4), accent: custom.accent, text: custom.text };
+      var onSelectPreset = props.onSelectPreset;
+      var onCreatePreset = props.onCreatePreset;
+      var presets = store && Array.isArray(store.presets) ? store.presets : [];
+      var activeId = store ? store.activeId : '';
+
       return h('div', { className: 'skin-drawer', role: 'dialog', 'aria-label': '皮肤库' },
         h('div', { className: 'skin-title' }, '皮肤库 / SKINS'),
         SKINS.map(function (item) {
-          var preview = item.preview;
           return h('div', {
             key: item.id, className: 'skin-card', 'data-on': item.id === skin ? 'true' : 'false',
             role: 'button', tabIndex: 0, 'aria-pressed': item.id === skin ? 'true' : 'false',
             onClick: function () { onPick(item.id); },
             onKeyDown: function (event) { if (event.key === 'Enter' || event.key === ' ') onPick(item.id); },
           },
-            h('div', { className: 'skin-prev', style: { background: preview.bg, border: '1px solid ' + preview.line } },
-              h('i', { style: { left: '8px', height: '16px', background: preview.accent } }),
-              h('i', { style: { left: '18px', height: '26px', background: preview.accent, opacity: '.55' } }),
-              h('i', { style: { left: '28px', height: '10px', background: preview.text, opacity: '.35' } }),
-              h('i', { style: { left: '38px', height: '21px', background: preview.accent, opacity: '.8' } }),
-              h('i', { style: { left: '48px', height: '13px', background: preview.accent, opacity: '.4' } }),
-              h('span', { style: { position: 'absolute', right: '5px', top: '4px', width: '5px', height: '5px', borderRadius: '50%', background: preview.accent } }),
-            ),
+            skinPreview(item.preview),
             h('div', { className: 'skin-meta' },
               h('div', { className: 'skin-name' }, item.name, h('em', null, item.en)),
               h('div', { className: 'skin-tag' }, item.tagline),
             ),
           );
         }),
+        h('div', { className: 'skin-sec-title' }, '自定义方案 / CUSTOM'),
+        presets.map(function (preset) {
+          var config = preset.config || {};
+          var preview = { bg: config.bg || '#05090b', line: alpha(config.accent || '#34f5c5', 0.4), accent: config.accent || '#34f5c5', text: config.text || '#dcfff4' };
+          var on = skin === 'custom' && activeId === preset.id;
+          return h('div', {
+            key: preset.id, className: 'skin-card', 'data-on': on ? 'true' : 'false',
+            role: 'button', tabIndex: 0,
+            onClick: function () { onSelectPreset(preset.id); onEditCustom(); },
+            onKeyDown: function (event) { if (event.key === 'Enter' || event.key === ' ') { onSelectPreset(preset.id); onEditCustom(); } },
+          },
+            skinPreview(preview),
+            h('div', { className: 'skin-meta' },
+              h('div', { className: 'skin-name' }, preset.name, h('em', null, 'CUSTOM')),
+              h('div', { className: 'skin-tag' }, '编辑于 ' + (fmtDate(preset.updatedAt) || '刚刚')),
+            ),
+          );
+        }),
         h('div', {
-          key: 'custom', className: 'skin-card', 'data-on': skin === 'custom' ? 'true' : 'false',
-          role: 'button', tabIndex: 0,
-          onClick: function () { onPick('custom'); onEditCustom(); },
-          onKeyDown: function (event) { if (event.key === 'Enter' || event.key === ' ') { onPick('custom'); onEditCustom(); } },
+          className: 'skin-card skin-new', role: 'button', tabIndex: 0,
+          onClick: function () { onCreatePreset(false); onEditCustom(); },
+          onKeyDown: function (event) { if (event.key === 'Enter' || event.key === ' ') { onCreatePreset(false); onEditCustom(); } },
         },
-          h('div', { className: 'skin-prev', style: { background: customPreview.bg, border: '1px solid ' + customPreview.line } },
-            h('i', { style: { left: '8px', height: '16px', background: customPreview.accent } }),
-            h('i', { style: { left: '18px', height: '26px', background: customPreview.accent, opacity: '.55' } }),
-            h('i', { style: { left: '28px', height: '10px', background: customPreview.text, opacity: '.35' } }),
-            h('i', { style: { left: '38px', height: '21px', background: customPreview.accent, opacity: '.8' } }),
-            h('i', { style: { left: '48px', height: '13px', background: customPreview.accent, opacity: '.4' } }),
-            h('span', { style: { position: 'absolute', right: '5px', top: '4px', width: '5px', height: '5px', borderRadius: '50%', background: customPreview.accent } }),
-          ),
+          h('span', { className: 'skin-new-plus' }, '+'),
           h('div', { className: 'skin-meta' },
-            h('div', { className: 'skin-name' }, '自定义', h('em', null, 'CUSTOM')),
-            h('div', { className: 'skin-tag' }, '背景图 · 配色 · 模块透明度'),
+            h('div', { className: 'skin-name' }, '新建自定义方案'),
+            h('div', { className: 'skin-tag' }, '从默认外观开始'),
           ),
         ),
         h('div', { className: 'skin-foot' },
-          '切换立即生效，选择会记住。按 1 / 2 / 3 也可切换。',
+          '切换立即生效，选择会记住。按 1 / 2 / 3 切换内置皮肤。',
           h('br'),
-          '自定义皮肤支持全局/单模块背景图、配色与透明度。',
+          '自定义方案可命名、复制、删除、导入导出；每个方案独立保存。',
         ),
         h('button', { className: 'hud-btn', style: { marginTop: '4px' }, onClick: onClose }, '收起皮肤库'),
       );
@@ -820,7 +1096,16 @@
 
     function CustomDrawer(props) {
       var custom = props.custom;
+      var preset = props.preset;
+      var store = props.store;
       var onChange = props.onChange;
+      var onRename = props.onRename;
+      var onSelect = props.onSelect;
+      var onCreate = props.onCreate;
+      var onDuplicate = props.onDuplicate;
+      var onDelete = props.onDelete;
+      var onExport = props.onExport;
+      var onImport = props.onImport;
       var onBack = props.onBack;
       var onReset = props.onReset;
       var openTuple = useState('colors');
@@ -834,12 +1119,15 @@
         onChange(Object.assign({}, custom, { modules: modules }));
       }
       function colorRow(key, label) {
-        var patchValue = {};
         return h('div', { className: 'cust-row', key: key },
           h('span', { className: 'cust-label' }, label),
           h('input', {
             className: 'cust-color', type: 'color', value: custom[key],
-            onChange: function (event) { patchValue[key] = event.target.value; patch(patchValue); },
+            onChange: function (event) {
+              var next = {};
+              next[key] = event.target.value;
+              patch(next);
+            },
           }),
           h('span', { className: 'cust-hex' }, custom[key]),
         );
@@ -847,7 +1135,31 @@
 
       return h('div', { className: 'skin-drawer custom', role: 'dialog', 'aria-label': '自定义皮肤' },
         h('div', { className: 'skin-title' }, '自定义皮肤 / CUSTOM'),
-        h('div', { className: 'cust-note' }, '改动即时生效，保存在本机；图片会压缩后存入 localStorage。'),
+        h('div', { className: 'cust-preset' },
+          h('input', {
+            key: preset.id, className: 'cust-input', defaultValue: preset.name, 'aria-label': '方案名称',
+            onBlur: function (event) {
+              var value = String(event.target.value || '').trim();
+              if (!value) { event.target.value = preset.name; return; }
+              onRename(preset.id, value);
+            },
+            onKeyDown: function (event) { if (event.key === 'Enter') event.target.blur(); },
+          }),
+          h('select', {
+            className: 'cust-select', value: preset.id, 'aria-label': '切换方案',
+            onChange: function (event) { onSelect(event.target.value); },
+          }, store.presets.map(function (item) {
+            return h('option', { key: item.id, value: item.id }, item.name);
+          })),
+        ),
+        h('div', { className: 'cust-actions' },
+          h('button', { className: 'cust-btn', onClick: function () { onCreate(false); } }, '新建'),
+          h('button', { className: 'cust-btn', onClick: function () { onDuplicate(preset.id); } }, '复制'),
+          h('button', { className: 'cust-btn', onClick: function () { onDelete(preset.id); } }, '删除'),
+          h('button', { className: 'cust-btn', onClick: onExport }, '导出'),
+          h('button', { className: 'cust-btn', onClick: function () { pickJsonFile(function (file) { onImport(file); }); } }, '导入'),
+        ),
+        h('div', { className: 'cust-note' }, '改动即时生效，保存在本机；同名方案会被覆盖。图片会压缩后存入 localStorage。'),
 
         h('div', { className: 'cust-sec' },
           h('div', { className: 'cust-sec-title' }, '配色'),
@@ -855,6 +1167,7 @@
           colorRow('panel', '面板'),
           colorRow('text', '文字'),
           colorRow('accent', '主色'),
+          colorRow('ok', '正常'),
           colorRow('warn', '警告'),
           colorRow('bad', '故障'),
         ),
@@ -927,7 +1240,7 @@
       return h('div', { className: 'consent-mask', onClick: props.onClose },
         h('div', { className: 'consent-card', onClick: function (event) { event.stopPropagation(); } },
           h('div', { className: 'consent-title' }, prompt ? '开启阅读偏好记录？' : '阅读偏好记录'),
-          h('div', { className: 'consent-note' }, '为了以后把话题推荐调得更适合你，插件可以在本机记录你点开话题后的停留时长。'),
+          h('div', { className: 'consent-note' }, '为了把话题推荐调得更适合你，插件可以在本机记录你点开话题后的停留时长。'),
           h('ul', { className: 'consent-list' },
             h('li', null, '只存在本机 localStorage，不上传、不出售、不公开；'),
             h('li', null, '只记录话题标签与估算停留时长，不记录 URL、页面内容、账号信息；'),
@@ -936,7 +1249,7 @@
           ),
           h('button', { className: 'consent-more', onClick: function () { setDetails(!details); } }, details ? '收起完整说明' : '查看完整说明'),
           details ? h('div', { className: 'consent-detail' },
-            '为什么提示：阅读偏好属于个人数据，插件选择先询问再记录。记录内容是“话题标签 + 点开后的停留时长”，用于以后在本地调整推荐顺序；不开启不影响任何功能。数据仅保存在当前浏览器 localStorage，插件没有服务器，不会上传、出售或公开。你可以随时关闭记录，并一键清除已有记录。停留时长由窗口焦点/可见性估算，可能因切窗口、挂机、手改本地存储而不准确。'
+            '为什么提示：阅读偏好属于个人数据，插件选择先询问再记录。记录内容是“话题标签 + 点开后的停留时长”，用于在本地调整推荐顺序；不开启不影响任何功能。数据仅保存在当前浏览器 localStorage，插件没有服务器，不会上传、出售或公开。你可以随时关闭记录，并一键清除已有记录。停留时长由窗口焦点/可见性估算，可能因切窗口、挂机、手改本地存储而不准确。'
           ) : null,
           h('div', { className: 'consent-actions' },
             prompt
@@ -959,13 +1272,25 @@
       var onRefresh = props.onRefresh;
       var custom = props.custom;
       var onCustomChange = props.onCustomChange;
+      var store = props.store;
+      var activePreset = props.activePreset;
+      var onSelectPreset = props.onSelectPreset;
+      var onCreatePreset = props.onCreatePreset;
+      var onDuplicatePreset = props.onDuplicatePreset;
+      var onDeletePreset = props.onDeletePreset;
+      var onRenamePreset = props.onRenamePreset;
+      var onExportPresets = props.onExportPresets;
+      var onImportPresets = props.onImportPresets;
       var ai = props.ai;
+      var plugins = props.plugins;
       var consentTuple = useState(getConsent());
       var consent = consentTuple[0];
       var setConsentState = consentTuple[1];
       var privacyTuple = useState(getConsent() === null);
       var privacyOpen = privacyTuple[0];
       var setPrivacyOpen = privacyTuple[1];
+      var privacyTickTuple = useState(0);
+      var bumpPrivacyTick = privacyTickTuple[1];
       var drawerTuple = useState(false);
       var drawer = drawerTuple[0];
       var setDrawer = drawerTuple[1];
@@ -982,6 +1307,26 @@
       var rangeTuple = useState('24h');
       var range = rangeTuple[0];
       var setRange = rangeTuple[1];
+      var feedTabTuple = useState(function () {
+        try {
+          var saved = localStorage.getItem('dsh.status.feedTab');
+          return saved === 'hn' || saved === 'plugins' ? saved : 'all';
+        } catch (error) { return 'all'; }
+      });
+      var feedTab = feedTabTuple[0];
+      var setFeedTab = feedTabTuple[1];
+      var pluginState = plugins ? plugins.state : { data: null, error: null, loading: false, stale: false, fetchedAt: 0 };
+      var hnFeed = heat.state.data
+        ? (heat.state.data.hnFeed || heat.state.data.feed.filter(function (item) { return item.sourceId === 'hn' || item.source === 'Hacker News'; }))
+        : [];
+      useEffect(function () {
+        if (feedTab === 'plugins' && plugins) plugins.load(false);
+      }, [feedTab]);
+      var selectFeedTab = useCallback(function (tab) {
+        setFeedTab(tab);
+        try { localStorage.setItem('dsh.status.feedTab', tab); } catch (error) {}
+        if (tab === 'plugins' && plugins) plugins.load(false);
+      }, [plugins]);
 
       useEffect(function () {
         function onKey(event) {
@@ -1054,7 +1399,7 @@
         var nowMs = Date.now();
         var DAY_MS = 86_400_000;
         fillItems = q.feed.filter(function (item) {
-          if (!item.at || !item.url || item.source === 'github') return false;
+          if (!item.at || !item.url || item.sourceId === 'github' || item.source === 'GitHub') return false;
           var age = nowMs - item.at;
           if (age < -300000 || age > 7 * DAY_MS) return false;
           if (usedUrls.has(item.url) || usedTitles.has(String(item.title || '').toLowerCase())) return false;
@@ -1066,10 +1411,67 @@
           return a.bucket - b.bucket || (b.item.weight || 0) - (a.item.weight || 0) || b.item.at - a.item.at;
         }).slice(0, need - aiItems.length).map(function (row) {
           var item = row.item;
-          return { id: 'fill-' + item.id, title: item.title, url: item.url, snippet: '', domain: domainOf(item.url), at: item.at, fill: true };
+          return { id: 'fill-' + item.id, title: item.title, url: item.url, snippet: item.source ? sourceShort(item.source) : '', domain: domainOf(item.url), at: item.at, bucket: row.bucket, source: item.source, fill: true };
         });
       }
       var displayItems = aiItems.concat(fillItems);
+      var prefProfile = getConsent() === 'granted' ? readPreferenceProfile() : [];
+      displayItems = rankByPreference(displayItems, prefProfile);
+      var prefActive = prefProfile.length > 0 && getConsent() === 'granted';
+
+      function renderFeedRow(item) {
+        return h('a', { key: item.id, className: 'feed-row', href: item.url, target: '_blank', rel: 'noreferrer', title: item.title },
+          h('span', { className: 'feed-badge' }, sourceShort(item.source)),
+          h('div', { className: 'feed-main' },
+            h('div', { className: 'feed-title' }, item.title),
+            h('div', { className: 'feed-meta' },
+              h('span', null, timeAgo(item.at)),
+              item.engagement > 0 ? h('span', null, '互动 ' + item.engagement) : null,
+              item.sources && item.sources.length > 1 ? h('span', null, item.sources.length + ' 源') : null,
+            ),
+          ),
+        );
+      }
+
+      function renderPluginRow(item) {
+        return h('a', { key: item.id, className: 'feed-row feed-plugin', href: item.url, target: '_blank', rel: 'noreferrer', title: item.title },
+          h('span', { className: 'feed-badge' }, 'GH'),
+          h('div', { className: 'feed-main' },
+            h('div', { className: 'feed-title' }, item.title),
+            item.summary ? h('div', { className: 'feed-desc', title: item.summary }, item.summary) : null,
+            h('div', { className: 'feed-meta' },
+              h('span', null, '更新 ' + timeAgo(item.at)),
+              item.stars > 0 ? h('span', null, '★ ' + item.stars) : null,
+              item.language ? h('span', null, item.language) : null,
+            ),
+          ),
+        );
+      }
+
+      function renderPluginBody() {
+        if (pluginState.loading && !pluginState.data) {
+          return Array.from({ length: 5 }).map(function (_, index) {
+            return h('div', { key: 'plugin-skel-' + index, className: 'feed-row' },
+              h('span', { className: 'feed-badge' }, 'GH'),
+              h('div', { className: 'feed-main' },
+                h('div', { className: 'hud-skel', style: { width: index % 2 ? '58%' : '72%', margin: '4px 0' } }),
+              ),
+            );
+          });
+        }
+        if (pluginState.error && !pluginState.data) {
+          return h('div', { className: 'hud-empty hud-err' },
+            'GitHub 暂不可用',
+            h('span', { className: 'dss-link', style: { marginLeft: '8px' }, onClick: function () { plugins.load(true); } }, '重试'),
+          );
+        }
+        var data = pluginState.data;
+        if (!data || !data.items || !data.items.length) return h('div', { className: 'hud-empty' }, 'GitHub 暂无 DSH 插件更新');
+        return h('div', null,
+          pluginState.stale ? h('div', { className: 'feed-note' }, 'GitHub 暂不可用 · 显示上次缓存') : null,
+          data.items.map(renderPluginRow),
+        );
+      }
 
       return h('div', { className: 'hud-backdrop', onMouseDown: function (event) { if (event.target === event.currentTarget) onClose(); } },
         h('div', { className: 'hud', 'data-skin': skin, style: hudStyle, role: 'dialog', 'aria-modal': 'true', 'aria-label': 'DeepSeek 运行与热度' },
@@ -1081,7 +1483,12 @@
                 className: 'hud-btn', 'data-on': drawer ? 'true' : 'false',
                 onClick: function () { var next = !drawer; setDrawer(next); if (next) setDrawerMode('list'); },
               }, '◐ 皮肤'),
-              h('button', { className: 'hud-btn', onClick: onRefresh, disabled: status.state.fetching || heat.state.fetching }, (status.state.fetching || heat.state.fetching) ? '刷新中…' : '刷新'),
+              h('button', { className: 'hud-btn', onClick: function () { setPrivacyOpen(true); } }, '隐私'),
+              h('button', {
+                className: 'hud-btn',
+                onClick: function () { onRefresh(); if (feedTab === 'plugins' && plugins) plugins.load(true); },
+                disabled: status.state.fetching || heat.state.fetching,
+              }, (status.state.fetching || heat.state.fetching) ? '刷新中…' : '刷新'),
               h('button', { className: 'hud-btn hud-close', onClick: onClose, 'aria-label': '关闭' }, '×'),
             ),
           ),
@@ -1096,7 +1503,7 @@
               h('div', { className: 'kpi-value' }, s ? pct(avgUptime) : '—', h('small', null, '%')),
               h('div', { className: 'kpi-sub' }, s ? '官方口径 · ' + total + ' 个组件' : '—'),
             ),
-            h('div', { className: 'kpi', 'data-mod': 'kpi', style: kpiStyle, 'data-tone': s && operational === total ? 'ok' : 'warn' },
+            h('div', { className: 'kpi', 'data-mod': 'kpi', style: kpiStyle, 'data-tone': s ? (operational === total ? 'ok' : 'warn') : undefined },
               h('div', { className: 'kpi-label' }, '组件在线'),
               h('div', { className: 'kpi-value' }, s ? operational + '/' + total : '—'),
               h('div', { className: 'kpi-sub' }, s ? (operational === total ? '全部正常' : '有组件异常') : '—'),
@@ -1193,7 +1600,7 @@
               h('div', { className: 'p', 'data-mod': 'topics', style: topicsStyle },
                 h('div', { className: 'p-head' },
                   h('b', null, '话题推荐'),
-                  h('span', null, q ? '聚合于 ' + fmtClock(q.fetchedAt) + ' · 7 天时效 · 点开即刷新' : 'TOPICS'),
+                  h('span', null, q ? '聚合于 ' + fmtClock(q.fetchedAt) + ' · 7 天时效 · 点开即刷新' + (prefActive ? ' · 本地偏好' : '') : 'TOPICS'),
                 ),
                 h('div', { className: 'p-body' },
                   heat.state.loading && !q ? h('div', null, h('div', { className: 'hud-skel', style: { width: '45%' } }), h('div', { className: 'hud-skel', style: { width: '70%' } }), h('div', { className: 'hud-skel', style: { width: '55%' } })) : null,
@@ -1208,12 +1615,12 @@
                       target: sampleUrl ? '_blank' : undefined,
                       rel: sampleUrl ? 'noreferrer' : undefined,
                       style: { color: 'inherit', textDecoration: 'none' },
-                      onClick: function () { trackRead(topic.label); rememberInterest(topic.label); },
+                      onClick: function () { if (sampleUrl) { trackRead(topic.label); rememberInterest(topic.label); } },
                     },
                       h('span', { className: 'topic-rank' }, String(index + 1).padStart(2, '0')),
                       h('div', { style: { minWidth: 0 } },
-                        h('div', { className: 'topic-label' }, h('span', { className: 'topic-star' }, '★'), topic.label),
-                        h('div', { className: 'topic-sample' }, topic.sample ? topic.sample.title : '来自公开提及'),
+                        h('div', { className: 'topic-label', title: topic.label }, h('span', { className: 'topic-star' }, '★'), topic.label),
+                        h('div', { className: 'topic-sample', title: topic.sample ? topic.sample.title : '' }, topic.sample ? topic.sample.title : '来自公开提及'),
                       ),
                       h('div', { className: 'topic-right' },
                         h('span', { className: 'topic-count' }, '×' + topic.count),
@@ -1232,8 +1639,8 @@
                     },
                       h('span', { className: 'topic-rank' }, String(topics.length + index + 1).padStart(2, '0')),
                       h('div', { style: { minWidth: 0 } },
-                        h('div', { className: 'topic-label' }, item.title),
-                        h('div', { className: 'topic-sample' }, item.domain || ''),
+                        h('div', { className: 'topic-label', title: item.title }, item.title),
+                        h('div', { className: 'topic-sample', title: item.title }, item.snippet || ''),
                       ),
                       h('div', { className: 'topic-right' },
                         h('span', { className: 'topic-time', title: new Date(item.at).toLocaleString() }, timeAgo(item.at)),
@@ -1252,6 +1659,7 @@
                     );
                   }) : null,
                   !aiLoading && displayItems.length < need ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' } }, '仅 7 天内 · 今日新话题不足') : null,
+                  aiState.limited && aiData ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' } }, '搜索限流 · 暂显示上次结果') : null,
                   aiError && !aiData ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' }, title: aiError },
                     '推荐补充失败',
                     h('span', { className: 'dss-link', style: { marginLeft: '8px' }, onClick: function () { if (ai) ai.load(Date.now()); } }, '重试'),
@@ -1259,34 +1667,53 @@
                 ),
               ),
               h('div', { className: 'p', 'data-mod': 'feed', style: feedStyle },
-                h('div', { className: 'p-head' }, h('b', null, '实时信息流'), h('a', { className: 'hud-link', href: 'https://hn.algolia.com/?q=DeepSeek', target: '_blank', rel: 'noreferrer' }, '全部 →')),
+                h('div', { className: 'p-head feed-head' },
+                  h('b', null, '实时信息流'),
+                  h('div', { className: 'seg feed-tabs' },
+                    [['all', '全部'], ['hn', 'HN'], ['plugins', 'GitHub']].map(function (tab) {
+                      return h('button', {
+                        key: tab[0], 'data-on': feedTab === tab[0] ? 'true' : 'false',
+                        title: tab[0] === 'plugins' ? 'DSH 插件更新' : tab[0] === 'hn' ? 'Hacker News 最新' : '全部来源',
+                        onClick: function () { selectFeedTab(tab[0]); },
+                      }, tab[1]);
+                    }),
+                  ),
+                  feedTab === 'plugins'
+                    ? h('a', { className: 'hud-link', href: 'https://github.com/topics/dsh-plugin', target: '_blank', rel: 'noreferrer', title: 'GitHub DSH 插件主题' }, 'GitHub →')
+                    : feedTab === 'hn'
+                      ? h('a', { className: 'hud-link', href: 'https://hn.algolia.com/?q=DeepSeek', target: '_blank', rel: 'noreferrer', title: '在 Hacker News 搜索 DeepSeek' }, 'HN →')
+                      : h('span', { className: 'feed-count' }, q ? q.sources.length + ' 源' : ''),
+                ),
                 h('div', { className: 'p-body' },
-                  q ? feed.map(function (item) {
-                    return h('a', { key: item.id, className: 'feed-row', href: item.url, target: '_blank', rel: 'noreferrer' },
-                      h('span', { className: 'feed-badge' }, sourceShort(item.source)),
-                      h('div', { className: 'feed-main' },
-                        h('div', { className: 'feed-title' }, item.title),
-                        h('div', { className: 'feed-meta' },
-                          h('span', null, timeAgo(item.at)),
-                          item.engagement > 0 ? h('span', null, '互动 ' + item.engagement) : null,
-                          item.sources.length > 1 ? h('span', null, item.sources.length + ' 源') : null,
-                        ),
-                      ),
-                    );
-                  }) : heatError ? h('div', { className: 'hud-empty hud-err' }, heatErrorText(heatError)) : h('div', { className: 'hud-empty' }, '聚合中…'),
+                  feedTab === 'plugins'
+                    ? renderPluginBody()
+                    : feedTab === 'hn'
+                      ? (q
+                        ? (hnFeed.length ? hnFeed.map(renderFeedRow) : h('div', { className: 'hud-empty' }, 'HN 暂无新动态'))
+                        : heatError ? h('div', { className: 'hud-empty hud-err' }, heatErrorText(heatError)) : h('div', { className: 'hud-empty' }, '聚合中…'))
+                      : (q
+                        ? feed.map(renderFeedRow)
+                        : heatError ? h('div', { className: 'hud-empty hud-err' }, heatErrorText(heatError)) : h('div', { className: 'hud-empty' }, '聚合中…')),
                 ),
               ),
             ),
           ),
           h('div', { className: 'hud-foot' },
             h('span', null, '官方状态 status.deepseek.com'),
+            h('span', { className: 'hud-version' }, 'v' + VERSION),
             h('span', null, '·'),
             h('span', null, '公开提及 HN / GitHub / 全球与中国媒体 RSS'),
             h('span', { className: 'spacer' }),
-            (q ? q.sources : []).map(function (source) {
-              return h('span', { key: source.id, title: source.error || '' }, h('i', { 'data-off': source.ok ? undefined : 'true' }), sourceShort(source.name));
-            }),
-            h('span', { style: { marginLeft: '10px' } }, '皮肤 ' + (skin === 'custom' ? '自定义' : ((SKINS.filter(function (item) { return item.id === skin; })[0] || {}).name || skin))),
+            q ? (function () {
+              var live = q.sources.filter(function (source) { return source.ok && source.count > 0; });
+              var failed = q.sources.filter(function (source) { return !source.ok; });
+              return h('span', {
+                title: failed.length
+                  ? '失败：' + failed.map(function (source) { return source.name; }).join('、')
+                  : '全部源正常',
+              }, h('i', { 'data-off': failed.length && !live.length ? 'true' : undefined }), '源 ' + live.length + '/' + q.sources.length);
+            })() : null,
+            h('span', { style: { marginLeft: '10px' } }, '皮肤 ' + (skin === 'custom' ? (activePreset ? activePreset.name : '自定义') : ((SKINS.filter(function (item) { return item.id === skin; })[0] || {}).name || skin))),
             h('span', { className: 'dss-link', style: { marginLeft: '10px' }, onClick: function () { setPrivacyOpen(true); } }, '隐私'),
           ),
           privacyOpen ? h(PrivacyModal, {
@@ -1295,20 +1722,37 @@
             onDisable: function () { setConsent('denied'); setConsentState('denied'); },
             onDecline: function () { setConsent('denied'); setConsentState('denied'); setPrivacyOpen(false); },
             onClose: function () { if (getConsent() === null) { setConsent('denied'); setConsentState('denied'); } setPrivacyOpen(false); },
-            onClear: function () { clearPrivacyData(); },
+            onClear: function () {
+              if (!window.confirm('清除本机保存的阅读偏好与停留记录？')) return;
+              clearPrivacyData();
+              bumpPrivacyTick(function (value) { return value + 1; });
+            },
           }) : null,
           drawer
             ? drawerMode === 'custom'
               ? h(CustomDrawer, {
                   custom: custom,
+                  preset: activePreset,
+                  store: store,
                   onChange: onCustomChange,
+                  onRename: onRenamePreset,
+                  onSelect: onSelectPreset,
+                  onCreate: onCreatePreset,
+                  onDuplicate: onDuplicatePreset,
+                  onDelete: onDeletePreset,
+                  onExport: onExportPresets,
+                  onImport: onImportPresets,
                   onBack: function () { setDrawerMode('list'); },
-                  onReset: function () { onCustomChange(mergeCustom(null)); },
+                  onReset: function () {
+                    if (window.confirm('恢复当前方案的默认外观？颜色和模块背景都会重置，且不可撤销。')) onCustomChange(mergeCustom(null));
+                  },
                 })
               : h(SkinDrawer, {
                   skin: skin,
-                  custom: custom,
+                  store: store,
                   onPick: onSkin,
+                  onSelectPreset: onSelectPreset,
+                  onCreatePreset: onCreatePreset,
                   onEditCustom: function () { setDrawerMode('custom'); },
                   onClose: function () { setDrawer(false); },
                 })
@@ -1344,14 +1788,21 @@
           h('span', { className: 'dss-heat-meta' }, q.counts.items + ' 条 / 24h'),
         ) : null,
         s ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px' } },
-          (s.items || []).slice(0, 5).map(function (item) {
-            var entry = item.type === 'section' ? item.section : item.component;
-            return h('div', { key: entry.id, style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '3px 2px' } },
-              h(Dot, { color: colorOf(entry.status) }),
-              h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, entry.title),
-              h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-tertiary,#888)', fontVariantNumeric: 'tabular-nums' } }, pctText(entry.uptime)),
-            );
-          }),
+          (function () {
+            var comps = [];
+            (s.items || []).forEach(function (item) {
+              if (item.type === 'section' && item.section && item.section.components) comps.push.apply(comps, item.section.components);
+              else if (item.component) comps.push(item.component);
+            });
+            comps.sort(function (a, b) { return (SEVERITY[b.status] || 0) - (SEVERITY[a.status] || 0); });
+            return comps.slice(0, 5).map(function (entry) {
+              return h('div', { key: entry.id, style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '3px 2px' } },
+                h(Dot, { color: colorOf(entry.status) }),
+                h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, entry.title),
+                h('span', { style: { fontSize: '10px', color: 'var(--dsw-alias-label-tertiary,#888)', fontVariantNumeric: 'tabular-nums' } }, pctText(entry.uptime)),
+              );
+            });
+          })(),
         ) : null,
         h('div', { className: 'dss-pop-foot' },
           h('span', null, q ? q.sources.filter(function (source) { return source.ok && source.count > 0; }).length + ' 个源有内容' : '聚合公开提及'),
@@ -1364,19 +1815,28 @@
       var status = useApi('/summary', true);
       var heat = useApi('/heat', false);
       var ai = useAiTopics();
-      var customTuple = useState(loadCustom);
-      var custom = customTuple[0];
-      var setCustomState = customTuple[1];
+      var plugins = useGithubPlugins();
+      var storeTuple = useState(loadCustomStore);
+      var store = storeTuple[0];
+      var setStore = storeTuple[1];
+      var activePreset = activePresetOf(store);
+      var custom = activePreset ? activePreset.config : mergeCustom(null);
       var saveTimer = useRef(0);
       var updateCustom = useCallback(function (next) {
-        setCustomState(next);
-        clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(function () {
-          try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(next)); }
-          catch (error) { console.warn('[dsh-status] 自定义皮肤过大，未能保存', error); try { window.alert('自定义皮肤保存失败：图片过大或浏览器存储已满，本次改动不会保留。'); } catch (ignored) {} }
-        }, 250);
+        setStore(function (prev) {
+          var presets = prev.presets.map(function (preset) {
+            return preset.id === prev.activeId
+              ? Object.assign({}, preset, { config: next, updatedAt: Date.now() })
+              : preset;
+          });
+          return { activeId: prev.activeId, presets: presets };
+        });
       }, []);
-      useEffect(function () { return function () { clearTimeout(saveTimer.current); }; }, []);
+      useEffect(function () {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(function () { saveCustomStore(store); }, 250);
+        return function () { clearTimeout(saveTimer.current); };
+      }, [store]);
       var openTuple = useState(false);
       var open = openTuple[0];
       var setOpen = openTuple[1];
@@ -1394,6 +1854,80 @@
         setSkinState(id);
         try { localStorage.setItem(SKIN_KEY, id); } catch (error) { /* 忽略隐私模式 */ }
       }, []);
+
+      var selectPreset = useCallback(function (id) {
+        setStore(function (prev) {
+          if (!prev.presets.some(function (preset) { return preset.id === id; })) return prev;
+          return { activeId: id, presets: prev.presets };
+        });
+        applySkin('custom');
+      }, [applySkin]);
+
+      var createPreset = useCallback(function (fromCurrent) {
+        setStore(function (prev) {
+          var active = activePresetOf(prev);
+          var source = fromCurrent && active ? JSON.parse(JSON.stringify(active.config)) : mergeCustom(null);
+          var preset = {
+            id: newPresetId(),
+            name: '自定义 ' + (prev.presets.length + 1),
+            config: mergeCustom(source),
+            updatedAt: Date.now(),
+          };
+          return { activeId: preset.id, presets: prev.presets.concat([preset]) };
+        });
+        applySkin('custom');
+      }, [applySkin]);
+
+      var duplicatePreset = useCallback(function (id) {
+        setStore(function (prev) {
+          var source = prev.presets.filter(function (preset) { return preset.id === id; })[0];
+          if (!source) return prev;
+          var copy = {
+            id: newPresetId(),
+            name: (source.name + ' 副本').slice(0, 24),
+            config: JSON.parse(JSON.stringify(source.config)),
+            updatedAt: Date.now(),
+          };
+          return { activeId: copy.id, presets: prev.presets.concat([copy]) };
+        });
+        applySkin('custom');
+      }, [applySkin]);
+
+      var deletePreset = useCallback(function (id) {
+        var target = store.presets.filter(function (preset) { return preset.id === id; })[0];
+        if (!target) return;
+        if (store.presets.length <= 1) { window.alert('至少保留一个自定义方案'); return; }
+        if (!window.confirm('删除自定义方案「' + target.name + '」？此操作不可撤销。')) return;
+        var left = store.presets.filter(function (preset) { return preset.id !== id; });
+        setStore({ activeId: store.activeId === id ? left[0].id : store.activeId, presets: left });
+      }, [store]);
+
+      var renamePreset = useCallback(function (id, name) {
+        var trimmed = String(name || '').trim().slice(0, 24);
+        if (!trimmed) return;
+        setStore(function (prev) {
+          return {
+            activeId: prev.activeId,
+            presets: prev.presets.map(function (preset) {
+              return preset.id === id ? Object.assign({}, preset, { name: trimmed, updatedAt: Date.now() }) : preset;
+            }),
+          };
+        });
+      }, []);
+
+      var exportPresets = useCallback(function () { downloadPresets(store); }, [store]);
+
+      var importPresets = useCallback(function (file) {
+        importPresetFile(file, function (list) {
+          setStore(function (prev) {
+            var additions = list.map(function (preset) {
+              return Object.assign({}, preset, { id: newPresetId(), name: preset.name.slice(0, 24), updatedAt: Date.now() });
+            });
+            return { activeId: additions[0].id, presets: prev.presets.concat(additions) };
+          });
+          applySkin('custom');
+        });
+      }, [applySkin]);
 
       var show = useCallback(function () {
         clearTimeout(timer.current);
@@ -1422,7 +1956,7 @@
       var refresh = useCallback(function () {
         status.load(true, true);
         heat.load(true, true);
-        ai.load(Date.now());
+        ai.load(Date.now(), true);
       }, [status, heat, ai]);
 
       var overall = status.state.data ? status.state.data.overall : 'unknown';
@@ -1440,7 +1974,12 @@
         hover && !open ? h(HoverCard, { status: status.state, heat: heat.state, onOpen: openHud, skin: skin, custom: custom }) : null,
         open ? h(Hud, {
           status: status, heat: heat, skin: skin, onSkin: applySkin,
-          custom: custom, onCustomChange: updateCustom, ai: ai,
+          custom: custom, onCustomChange: updateCustom, ai: ai, plugins: plugins,
+          store: store, activePreset: activePreset,
+          onSelectPreset: selectPreset, onCreatePreset: createPreset,
+          onDuplicatePreset: duplicatePreset, onDeletePreset: deletePreset,
+          onRenamePreset: renamePreset, onExportPresets: exportPresets,
+          onImportPresets: importPresets,
           onClose: closeHud, onRefresh: refresh,
         }) : null,
       );

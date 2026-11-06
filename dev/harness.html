@@ -68,6 +68,7 @@
     document.write('<script src="./fixture-live.js"><\/script>');
     document.write('<script src="./fixture-heat.js"><\/script>');
     document.write('<script src="./fixture-ai.js"><\/script>');
+    document.write('<script src="./fixture-plugins.js"><\/script>');
   </script>
   <script>
     window.__ModuleLoader__ = {
@@ -81,6 +82,13 @@
     window.fetch = function (url) {
       var isHeat = String(url).indexOf('/heat') >= 0;
       var isAi = String(url).indexOf('/ai-topics') >= 0;
+      var isPlugins = String(url).indexOf('/github-plugins') >= 0;
+      if (isPlugins) {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, data: window.__PLUGINS }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
       if (isAi) {
         return Promise.resolve(new Response(JSON.stringify({ ok: true, data: window.__AI }), {
           status: 200,
