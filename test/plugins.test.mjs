@@ -2,56 +2,55 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getGithubPlugins, peekGithubPlugins, __resetGithubPluginsForTests } from '../lib/plugin-feed.js';
 
-const payload = {
-  items: [
-    {
-      id: 1,
-      full_name: 'alice/dsh-older',
-      html_url: 'https://github.com/alice/dsh-older',
-      description: 'older plugin',
-      pushed_at: '2026-11-05T10:00:00Z',
-      stargazers_count: 3,
-      language: 'TypeScript',
-      topics: ['dsh-plugin'],
-    },
-    {
-      id: 2,
-      full_name: 'bob/dsh-newer',
-      html_url: 'https://github.com/bob/dsh-newer',
-      description: 'newer plugin',
-      pushed_at: '2026-11-06T05:00:00Z',
-      stargazers_count: 42,
-      language: 'JavaScript',
-      topics: ['dsh-plugin', 'dashboard'],
-    },
-    {
-      id: 3,
-      full_name: 'carol/no-date',
-      html_url: 'https://github.com/carol/no-date',
-      description: 'missing pushed_at',
-      stargazers_count: 0,
-    },
-  ],
-};
+function repo(id, name, minutesAgo, stars = 0) {
+  return {
+    id,
+    full_name: name,
+    html_url: 'https://github.com/' + name,
+    description: name + ' plugin',
+    pushed_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+    stargazers_count: stars,
+    language: 'TypeScript',
+    topics: ['dsh-plugin'],
+  };
+}
 
-test('GitHub 插件流只保留有效仓库，按 pushed_at 倒序', async () => {
+test('GitHub 插件流只保留 1 小时内有效仓库，按 pushed_at 倒序', async () => {
   __resetGithubPluginsForTests();
   let calls = 0;
   globalThis.fetch = async () => {
     calls += 1;
-    return new Response(JSON.stringify(payload), { status: 200 });
+    return new Response(JSON.stringify({
+      items: [
+        repo(1, 'alice/dsh-older', 45, 3),
+        repo(2, 'bob/dsh-newer', 10, 42),
+        repo(3, 'carol/too-old', 120, 5),
+        { id: 4, full_name: 'dave/no-date', html_url: 'https://github.com/dave/no-date', description: 'missing' },
+      ],
+    }), { status: 200 });
   };
   const data = await getGithubPlugins({ force: true });
   assert.equal(data.ok, true);
+  assert.equal(data.windowMinutes, 60);
+  assert.equal(data.limit, 30);
   assert.equal(data.items.length, 2);
   assert.equal(data.items[0].title, 'bob/dsh-newer');
   assert.equal(data.items[0].stars, 42);
-  assert.equal(data.items[0].language, 'JavaScript');
-  assert.deepEqual(data.items[0].topics, ['dsh-plugin', 'dashboard']);
+  assert.equal(data.items[0].language, 'TypeScript');
   assert.ok(data.items[0].at > data.items[1].at);
   assert.equal(data.stale, false);
   assert.equal(calls, 1);
   assert.equal(peekGithubPlugins().items.length, 2);
+});
+
+test('1 小时内超过 30 条时只保留最新 30 条', async () => {
+  __resetGithubPluginsForTests();
+  const items = Array.from({ length: 35 }, (_, index) => repo(100 + index, 'owner/dsh-' + index, index));
+  globalThis.fetch = async () => new Response(JSON.stringify({ items }), { status: 200 });
+  const data = await getGithubPlugins({ force: true });
+  assert.equal(data.items.length, 30);
+  assert.equal(data.items[0].title, 'owner/dsh-0');
+  assert.equal(data.items[29].title, 'owner/dsh-29');
 });
 
 test('非 force 命中 10 分钟缓存，不重复请求', async () => {
@@ -59,7 +58,7 @@ test('非 force 命中 10 分钟缓存，不重复请求', async () => {
   let calls = 0;
   globalThis.fetch = async () => {
     calls += 1;
-    return new Response(JSON.stringify(payload), { status: 200 });
+    return new Response(JSON.stringify({ items: [repo(1, 'alice/dsh-one', 5)] }), { status: 200 });
   };
   await getGithubPlugins({ force: true });
   await getGithubPlugins();

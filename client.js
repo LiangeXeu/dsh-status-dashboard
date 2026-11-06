@@ -10,7 +10,7 @@
   'use strict';
 
   var PACKAGE = 'dsh-status-dashboard';
-  var VERSION = '0.3.0-alpha.1';
+  var VERSION = '0.3.0';
   var ROUTE_SEGMENT = '/dsh-status-2417';
   var SKIN_KEY = 'dsh.status.skin';
 
@@ -656,6 +656,7 @@
     '.feed-desc{font-size:9px;line-height:1.35;color:var(--h-dim);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
     '.feed-plugin .feed-title{font-weight:600}',
     '.feed-note{margin:2px 0 4px;font-size:9px;color:var(--h-warn)}',
+    '.feed-range{margin:0 0 4px;font-size:9px;color:var(--h-mute);letter-spacing:.03em}',
     '.hud-version{color:var(--h-mute);font-variant-numeric:tabular-nums}',
     '.hud-foot{position:relative;z-index:2;display:flex;align-items:center;flex-wrap:wrap;row-gap:4px;gap:12px;padding:0 18px 10px;font-size:9px;color:var(--h-mute)}',
     '.hud-foot .spacer{flex:1}',
@@ -1317,7 +1318,7 @@
       var setFeedTab = feedTabTuple[1];
       var pluginState = plugins ? plugins.state : { data: null, error: null, loading: false, stale: false, fetchedAt: 0 };
       var hnFeed = heat.state.data
-        ? (heat.state.data.hnFeed || heat.state.data.feed.filter(function (item) { return item.sourceId === 'hn' || item.source === 'Hacker News'; }))
+        ? (heat.state.data.hnFeed || heat.state.data.feed.filter(function (item) { return item.sourceId === 'hn' || item.source === 'Hacker News'; })).slice(0, 30)
         : [];
       useEffect(function () {
         if (feedTab === 'plugins' && plugins) plugins.load(false);
@@ -1466,10 +1467,12 @@
           );
         }
         var data = pluginState.data;
-        if (!data || !data.items || !data.items.length) return h('div', { className: 'hud-empty' }, 'GitHub 暂无 DSH 插件更新');
+        var fresh = data && data.items ? data.items.filter(function (item) { return Date.now() - item.at <= 60 * 60_000; }).slice(0, 30) : [];
+        if (!fresh.length) return h('div', { className: 'hud-empty' }, '近 1 小时暂无 DSH 插件更新');
         return h('div', null,
+          h('div', { className: 'feed-range' }, '近 1 小时 · ' + fresh.length + ' 条 · 上限 30'),
           pluginState.stale ? h('div', { className: 'feed-note' }, 'GitHub 暂不可用 · 显示上次缓存') : null,
-          data.items.map(renderPluginRow),
+          fresh.map(renderPluginRow),
         );
       }
 
@@ -1689,7 +1692,7 @@
                     ? renderPluginBody()
                     : feedTab === 'hn'
                       ? (q
-                        ? (hnFeed.length ? hnFeed.map(renderFeedRow) : h('div', { className: 'hud-empty' }, 'HN 暂无新动态'))
+                        ? (hnFeed.length ? h('div', null, h('div', { className: 'feed-range' }, '近 7 天 · ' + hnFeed.length + ' 条 · 上限 30'), hnFeed.map(renderFeedRow)) : h('div', { className: 'hud-empty' }, '近 7 天暂无 HN 动态'))
                         : heatError ? h('div', { className: 'hud-empty hud-err' }, heatErrorText(heatError)) : h('div', { className: 'hud-empty' }, '聚合中…'))
                       : (q
                         ? feed.map(renderFeedRow)

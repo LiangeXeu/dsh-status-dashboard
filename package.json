@@ -1,6 +1,6 @@
 {
   "name": "dsh-status-dashboard",
-  "version": "0.3.0-alpha.1",
+  "version": "0.3.0",
   "private": false,
   "type": "module",
   "description": "DeepSeek 运行与热度仪表盘：标题栏状态按钮，四套皮肤，7 天内话题，以及 HN / GitHub 插件信息流。",

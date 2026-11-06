@@ -1,4 +1,4 @@
-# 上架清单（0.3.0 Alpha）
+# 上架清单（0.3.0）
 
 这份文件是给插件市场/仓库发布用的检查表，不参与运行时加载。
 
@@ -7,7 +7,7 @@
 | 字段 | 值 | 状态 |
 | --- | --- | --- |
 | name | `dsh-status-dashboard` | ✅ |
-| version | `0.3.0-alpha.1` | ⏳ 待发布 |
+| version | `0.3.0` | ⏳ 待验证后发布 |
 | description | 中文一句话，见 package.json | ✅ |
 | icon | `assets/icon.svg`（64×64，346 B） | ✅ |
 | license | 自定义：DSH 仪表盘署名许可 1.0（`LICENSE`，非 OSI 开源） | ✅ |
