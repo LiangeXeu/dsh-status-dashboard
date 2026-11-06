@@ -10,8 +10,8 @@ test('账号 token 搜索并过滤非 http/https', async (t) => {
   globalThis.fetch = async (url, init) => {
     captured = { url: String(url), headers: init.headers, body: JSON.parse(init.body) };
     return new Response(JSON.stringify({ results: [
-      { url: 'https://a.com/1', title: 'DeepSeek 新模型', snippet: '发布' },
-      { url: 'javascript:alert(1)', title: 'DeepSeek bad', snippet: '' },
+      { url: 'https://a.com/1', title: 'DeepSeek 新模型', snippet: '发布', date: new Date().toISOString() },
+      { url: 'javascript:alert(1)', title: 'DeepSeek bad', snippet: '', date: new Date().toISOString() },
       { url: 'https://a.com/1', title: 'DeepSeek 新模型', snippet: 'dup' },
     ] }), { status: 200 });
   };
@@ -21,7 +21,7 @@ test('账号 token 搜索并过滤非 http/https', async (t) => {
   assert.equal(out.items.length, 1);
   assert.equal(out.items[0].url, 'https://a.com/1');
   assert.equal(captured.headers['x-dsh-auth-token'], 'tok-1');
-  assert.equal(captured.body.count, 12);
+  assert.equal(captured.body.count, 20);
 });
 
 test('账号结果为空时回退 web 搜索', async (t) => {
@@ -30,7 +30,7 @@ test('账号结果为空时回退 web 搜索', async (t) => {
   const ctx = {
     get: (name) => {
       if (name === 'deepseekAccount') return { resolveToken: async () => 'tok-1' };
-      if (name === 'web') return { search: async () => ({ sources: [{ url: 'https://web.com/1', title: 'DeepSeek web' }] }) };
+      if (name === 'web') return { search: async () => ({ sources: [{ url: 'https://web.com/1', title: 'DeepSeek web', publishedAt: new Date().toISOString() }] }) };
       return undefined;
     },
   };

@@ -227,7 +227,50 @@
       .map(function (entry) { return entry.label; });
   }
 
+  var READS_KEY = 'dsh.status.reads.v1';
+  var CONSENT_KEY = 'dsh.status.readsConsent.v1';
+  var PENDING_KEY = 'dsh.status.pendingRead.v1';
+  var READ_MIN_MS = 20_000;
+  var READ_MAX_MS = 20 * 60_000;
+  var READ_WEAK_MS = 40 * 60_000;
+
+  function getConsent() {
+    try { var value = localStorage.getItem(CONSENT_KEY); return value === 'granted' || value === 'denied' ? value : null; }
+    catch (error) { return null; }
+  }
+
+  function setConsent(value) { try { localStorage.setItem(CONSENT_KEY, value); } catch (error) {} }
+
+  function readReads() {
+    try { var raw = JSON.parse(localStorage.getItem(READS_KEY) || '[]'); return Array.isArray(raw) ? raw : []; }
+    catch (error) { return []; }
+  }
+
+  function finalizePendingRead() {
+    if (getConsent() !== 'granted') return;
+    try {
+      var raw = localStorage.getItem(PENDING_KEY);
+      if (!raw) return;
+      localStorage.removeItem(PENDING_KEY);
+      var pending = JSON.parse(raw);
+      if (!pending || !pending.startedAt || !pending.label) return;
+      var dwell = Date.now() - Number(pending.startedAt);
+      var weight = dwell >= READ_MIN_MS && dwell <= READ_MAX_MS ? 1 : dwell > READ_MAX_MS && dwell <= READ_WEAK_MS ? 0.3 : 0;
+      if (!weight) return;
+      var list = readReads();
+      list.unshift({ label: String(pending.label).slice(0, 40), dwellMs: dwell, weight: weight, at: Date.now() });
+      localStorage.setItem(READS_KEY, JSON.stringify(list.slice(0, 50)));
+    } catch (error) {}
+  }
+
+  function trackRead(label) {
+    if (getConsent() !== 'granted') return;
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify({ label: String(label || '').slice(0, 40), startedAt: Date.now() })); }
+    catch (error) {}
+  }
+
   function rememberInterest(label) {
+    if (getConsent() !== 'granted') return;
     var text = String(label || '').trim().slice(0, 24);
     if (!text) return;
     try {
@@ -239,7 +282,18 @@
         .sort(function (a, b) { return b.count - a.count || b.at - a.at; })
         .slice(0, 24);
       localStorage.setItem(INTEREST_KEY, JSON.stringify(list));
-    } catch (error) { /* ignore */ }
+    } catch (error) {}
+  }
+
+  function clearPrivacyData() {
+    try { localStorage.removeItem(READS_KEY); localStorage.removeItem(PENDING_KEY); localStorage.removeItem(INTEREST_KEY); }
+    catch (error) {}
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', finalizePendingRead);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) finalizePendingRead(); });
+    finalizePendingRead();
   }
 
   var STATUS_LABEL = {
@@ -316,6 +370,10 @@
     var date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
     date.setUTCDate(date.getUTCDate() + index);
     return (date.getUTCMonth() + 1) + '月' + date.getUTCDate() + '日';
+  }
+
+  function domainOf(url) {
+    try { return new URL(url).hostname.replace(/^www\./, ''); } catch (error) { return ''; }
   }
 
   function sourceShort(name) {
@@ -437,6 +495,16 @@
     '.hud-foot i{width:4px;height:4px;border-radius:50%;display:inline-block;margin-right:4px;background:var(--h-ok)}',
     '.hud-foot i[data-off="true"]{background:var(--h-bad)}',
     '.hud-note{color:var(--h-mute);font-size:9px}',
+    '.topic-time{font-size:9px;color:var(--h-mute);font-variant-numeric:tabular-nums;white-space:nowrap}',
+    '.topic-new{font-size:9px;color:var(--h-accent);border:1px solid var(--h-line2);border-radius:3px;padding:0 3px;line-height:1.4}',
+    '.consent-mask{position:absolute;inset:0;z-index:9;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45);backdrop-filter:blur(3px)}',
+    '.consent-card{width:min(440px,100%);max-height:82%;overflow:auto;padding:18px;border:1px solid var(--h-line2);border-radius:12px;background:var(--h-panel);box-shadow:0 24px 60px rgba(0,0,0,.45)}',
+    '.consent-title{font-size:14px;font-weight:650;margin-bottom:8px}',
+    '.consent-note{font-size:11px;line-height:1.6;color:var(--h-dim)}',
+    '.consent-list{margin:8px 0;padding-left:16px;font-size:10.5px;line-height:1.7;color:var(--h-dim)}',
+    '.consent-more{align-self:flex-start;background:none;border:0;color:var(--h-accent);font-size:10px;cursor:pointer;padding:0}',
+    '.consent-detail{margin:8px 0;padding:8px;border:1px solid var(--h-line);border-radius:6px;font-size:10px;line-height:1.7;color:var(--h-mute)}',
+    '.consent-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}',
     '.skin-drawer{position:absolute;top:0;right:0;bottom:0;width:340px;z-index:6;display:flex;flex-direction:column;gap:9px;padding:16px 14px;border-left:1px solid var(--h-line2);background:color-mix(in srgb,var(--h-bg) 92%,transparent);backdrop-filter:blur(14px);animation:hud-slide .18s ease-out}',
     '@keyframes hud-slide{from{transform:translateX(18px);opacity:0}to{transform:none;opacity:1}}',
     '.skin-title{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--h-dim)}',
@@ -577,9 +645,7 @@
         var controller = new AbortController();
         abort.current = controller;
         setState({ data: null, error: null, loading: true });
-        var interests = readInterests().slice(0, 3);
-        var url = ROUTE_PATH + '/ai-topics?seed=' + encodeURIComponent(String(seed || Date.now())) +
-          '&interests=' + encodeURIComponent(interests.join(','));
+        var url = ROUTE_PATH + '/ai-topics?seed=' + encodeURIComponent(String(seed || Date.now()));
         fetch(url, { headers: { accept: 'application/json' }, signal: controller.signal, cache: 'no-store' })
           .then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -852,6 +918,38 @@
       );
     }
 
+    function PrivacyModal(props) {
+      var detailsTuple = useState(false);
+      var details = detailsTuple[0];
+      var setDetails = detailsTuple[1];
+      var granted = props.consent === 'granted';
+      var prompt = props.consent === null;
+      return h('div', { className: 'consent-mask', onClick: props.onClose },
+        h('div', { className: 'consent-card', onClick: function (event) { event.stopPropagation(); } },
+          h('div', { className: 'consent-title' }, prompt ? '开启阅读偏好记录？' : '阅读偏好记录'),
+          h('div', { className: 'consent-note' }, '为了以后把话题推荐调得更适合你，插件可以在本机记录你点开话题后的停留时长。'),
+          h('ul', { className: 'consent-list' },
+            h('li', null, '只存在本机 localStorage，不上传、不出售、不公开；'),
+            h('li', null, '只记录话题标签与估算停留时长，不记录 URL、页面内容、账号信息；'),
+            h('li', null, '不开也能正常使用全部功能；可随时关闭并清除；'),
+            h('li', null, '没有服务器校准，切窗口/挂机会影响估算，仅作软信号。'),
+          ),
+          h('button', { className: 'consent-more', onClick: function () { setDetails(!details); } }, details ? '收起完整说明' : '查看完整说明'),
+          details ? h('div', { className: 'consent-detail' },
+            '为什么提示：阅读偏好属于个人数据，插件选择先询问再记录。记录内容是“话题标签 + 点开后的停留时长”，用于以后在本地调整推荐顺序；不开启不影响任何功能。数据仅保存在当前浏览器 localStorage，插件没有服务器，不会上传、出售或公开。你可以随时关闭记录，并一键清除已有记录。停留时长由窗口焦点/可见性估算，可能因切窗口、挂机、手改本地存储而不准确。'
+          ) : null,
+          h('div', { className: 'consent-actions' },
+            prompt
+              ? h('button', { className: 'hud-btn', onClick: props.onEnable }, '开启记录')
+              : h('button', { className: 'hud-btn', onClick: granted ? props.onDisable : props.onEnable }, granted ? '关闭记录' : '开启记录'),
+            prompt ? h('button', { className: 'hud-btn', onClick: props.onDecline }, '暂不开启') : null,
+            h('button', { className: 'hud-btn', onClick: props.onClear }, '清除本地记录'),
+            h('button', { className: 'hud-btn', onClick: props.onClose }, '关闭'),
+          ),
+        ),
+      );
+    }
+
     function Hud(props) {
       var status = props.status;
       var heat = props.heat;
@@ -862,6 +960,12 @@
       var custom = props.custom;
       var onCustomChange = props.onCustomChange;
       var ai = props.ai;
+      var consentTuple = useState(getConsent());
+      var consent = consentTuple[0];
+      var setConsentState = consentTuple[1];
+      var privacyTuple = useState(getConsent() === null);
+      var privacyOpen = privacyTuple[0];
+      var setPrivacyOpen = privacyTuple[1];
       var drawerTuple = useState(false);
       var drawer = drawerTuple[0];
       var setDrawer = drawerTuple[1];
@@ -940,16 +1044,32 @@
       var aiLoading = aiState.loading;
       var aiError = aiState.error;
       var need = Math.max(0, 10 - topics.length);
-      var interests = readInterests();
-      var aiItems = ((aiData && aiData.items) || []).map(function (item) {
-        var text = (item.title + ' ' + (item.snippet || '')).toLowerCase();
-        var score = 0;
-        interests.slice(0, 6).forEach(function (label) {
-          var token = String(label).toLowerCase();
-          if (token.length >= 2 && text.indexOf(token) >= 0) score += 1;
+      var aiItems = ((aiData && aiData.items) || []).slice(0, need);
+      var usedUrls = new Set();
+      var usedTitles = new Set();
+      topics.forEach(function (topic) { if (topic.sample && topic.sample.url) usedUrls.add(topic.sample.url); });
+      aiItems.forEach(function (item) { usedUrls.add(item.url); usedTitles.add(String(item.title || '').toLowerCase()); });
+      var fillItems = [];
+      if (aiItems.length < need && q && q.feed) {
+        var nowMs = Date.now();
+        var DAY_MS = 86_400_000;
+        fillItems = q.feed.filter(function (item) {
+          if (!item.at || !item.url || item.source === 'github') return false;
+          var age = nowMs - item.at;
+          if (age < -300000 || age > 7 * DAY_MS) return false;
+          if (usedUrls.has(item.url) || usedTitles.has(String(item.title || '').toLowerCase())) return false;
+          return true;
+        }).map(function (item) {
+          var bucket = item.at > nowMs - DAY_MS ? 0 : item.at > nowMs - 3 * DAY_MS ? 1 : 2;
+          return { item: item, bucket: bucket };
+        }).sort(function (a, b) {
+          return a.bucket - b.bucket || (b.item.weight || 0) - (a.item.weight || 0) || b.item.at - a.item.at;
+        }).slice(0, need - aiItems.length).map(function (row) {
+          var item = row.item;
+          return { id: 'fill-' + item.id, title: item.title, url: item.url, snippet: '', domain: domainOf(item.url), at: item.at, fill: true };
         });
-        return { item: item, score: score };
-      }).sort(function (a, b) { return b.score - a.score; }).slice(0, need).map(function (row) { return row.item; });
+      }
+      var displayItems = aiItems.concat(fillItems);
 
       return h('div', { className: 'hud-backdrop', onMouseDown: function (event) { if (event.target === event.currentTarget) onClose(); } },
         h('div', { className: 'hud', 'data-skin': skin, style: hudStyle, role: 'dialog', 'aria-modal': 'true', 'aria-label': 'DeepSeek 运行与热度' },
@@ -1073,7 +1193,7 @@
               h('div', { className: 'p', 'data-mod': 'topics', style: topicsStyle },
                 h('div', { className: 'p-head' },
                   h('b', null, '话题推荐'),
-                  h('span', null, q ? '聚合于 ' + fmtClock(q.fetchedAt) + ' · 点开即刷新' : 'TOPICS'),
+                  h('span', null, q ? '聚合于 ' + fmtClock(q.fetchedAt) + ' · 7 天时效 · 点开即刷新' : 'TOPICS'),
                 ),
                 h('div', { className: 'p-body' },
                   heat.state.loading && !q ? h('div', null, h('div', { className: 'hud-skel', style: { width: '45%' } }), h('div', { className: 'hud-skel', style: { width: '70%' } }), h('div', { className: 'hud-skel', style: { width: '55%' } })) : null,
@@ -1088,7 +1208,7 @@
                       target: sampleUrl ? '_blank' : undefined,
                       rel: sampleUrl ? 'noreferrer' : undefined,
                       style: { color: 'inherit', textDecoration: 'none' },
-                      onClick: function () { rememberInterest(topic.label); },
+                      onClick: function () { trackRead(topic.label); rememberInterest(topic.label); },
                     },
                       h('span', { className: 'topic-rank' }, String(index + 1).padStart(2, '0')),
                       h('div', { style: { minWidth: 0 } },
@@ -1103,12 +1223,12 @@
                       ),
                     );
                   }),
-                  aiItems.map(function (item, index) {
+                  displayItems.map(function (item, index) {
                     return h('a', {
                       key: item.id, className: 'topic topic-ai',
                       href: item.url, target: '_blank', rel: 'noreferrer',
                       style: { color: 'inherit', textDecoration: 'none' },
-                      onClick: function () { rememberInterest(item.title); },
+                      onClick: function () { trackRead(item.title); rememberInterest(item.title); },
                     },
                       h('span', { className: 'topic-rank' }, String(topics.length + index + 1).padStart(2, '0')),
                       h('div', { style: { minWidth: 0 } },
@@ -1116,11 +1236,13 @@
                         h('div', { className: 'topic-sample' }, item.domain || ''),
                       ),
                       h('div', { className: 'topic-right' },
+                        h('span', { className: 'topic-time', title: new Date(item.at).toLocaleString() }, timeAgo(item.at)),
+                        item.at > Date.now() - 86400000 ? h('span', { className: 'topic-new' }, '新') : null,
                         h('span', { className: 'chip', style: { height: '16px', padding: '0 4px' } }, (item.domain || '').slice(0, 14)),
                       ),
                     );
                   }),
-                  aiLoading ? Array.from({ length: Math.max(0, need - aiItems.length) }).map(function (_, index) {
+                  aiLoading ? Array.from({ length: Math.max(0, need - displayItems.length) }).map(function (_, index) {
                     return h('div', { key: 'ai-skel-' + index, className: 'topic topic-ai' },
                       h('span', { className: 'topic-rank' }, '··'),
                       h('div', { style: { minWidth: 0 } },
@@ -1129,6 +1251,7 @@
                       h('div', null),
                     );
                   }) : null,
+                  !aiLoading && displayItems.length < need ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' } }, '仅 7 天内 · 今日新话题不足') : null,
                   aiError && !aiData ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' }, title: aiError },
                     '推荐补充失败',
                     h('span', { className: 'dss-link', style: { marginLeft: '8px' }, onClick: function () { if (ai) ai.load(Date.now()); } }, '重试'),
@@ -1158,13 +1281,22 @@
           h('div', { className: 'hud-foot' },
             h('span', null, '官方状态 status.deepseek.com'),
             h('span', null, '·'),
-            h('span', null, '公开提及 HN / GitHub / IT之家 / 量子位 / Solidot / 开源中国'),
+            h('span', null, '公开提及 HN / GitHub / 全球与中国媒体 RSS'),
             h('span', { className: 'spacer' }),
             (q ? q.sources : []).map(function (source) {
               return h('span', { key: source.id, title: source.error || '' }, h('i', { 'data-off': source.ok ? undefined : 'true' }), sourceShort(source.name));
             }),
             h('span', { style: { marginLeft: '10px' } }, '皮肤 ' + (skin === 'custom' ? '自定义' : ((SKINS.filter(function (item) { return item.id === skin; })[0] || {}).name || skin))),
+            h('span', { className: 'dss-link', style: { marginLeft: '10px' }, onClick: function () { setPrivacyOpen(true); } }, '隐私'),
           ),
+          privacyOpen ? h(PrivacyModal, {
+            consent: consent,
+            onEnable: function () { setConsent('granted'); setConsentState('granted'); setPrivacyOpen(false); },
+            onDisable: function () { setConsent('denied'); setConsentState('denied'); },
+            onDecline: function () { setConsent('denied'); setConsentState('denied'); setPrivacyOpen(false); },
+            onClose: function () { if (getConsent() === null) { setConsent('denied'); setConsentState('denied'); } setPrivacyOpen(false); },
+            onClear: function () { clearPrivacyData(); },
+          }) : null,
           drawer
             ? drawerMode === 'custom'
               ? h(CustomDrawer, {
