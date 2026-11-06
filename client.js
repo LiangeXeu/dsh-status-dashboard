@@ -1467,10 +1467,10 @@
           );
         }
         var data = pluginState.data;
-        var fresh = data && data.items ? data.items.filter(function (item) { return Date.now() - item.at <= 60 * 60_000; }).slice(0, 30) : [];
-        if (!fresh.length) return h('div', { className: 'hud-empty' }, '近 1 小时暂无 DSH 插件更新');
+        var fresh = data && data.items ? data.items.filter(function (item) { return Date.now() - item.at <= 24 * 60 * 60_000; }).slice(0, 30) : [];
+        if (!fresh.length) return h('div', { className: 'hud-empty' }, '近 24 小时暂无 DSH 插件更新');
         return h('div', null,
-          h('div', { className: 'feed-range' }, '近 1 小时 · ' + fresh.length + ' 条 · 上限 30'),
+          h('div', { className: 'feed-range' }, '近 24 小时 · ' + fresh.length + ' 条 · 上限 30'),
           pluginState.stale ? h('div', { className: 'feed-note' }, 'GitHub 暂不可用 · 显示上次缓存') : null,
           fresh.map(renderPluginRow),
         );
@@ -1692,7 +1692,7 @@
                     ? renderPluginBody()
                     : feedTab === 'hn'
                       ? (q
-                        ? (hnFeed.length ? h('div', null, h('div', { className: 'feed-range' }, '近 7 天 · ' + hnFeed.length + ' 条 · 上限 30'), hnFeed.map(renderFeedRow)) : h('div', { className: 'hud-empty' }, '近 7 天暂无 HN 动态'))
+                        ? (hnFeed.length ? h('div', null, h('div', { className: 'feed-range' }, '近 30 天 · ' + hnFeed.length + ' 条 · 上限 30'), hnFeed.map(renderFeedRow)) : h('div', { className: 'hud-empty' }, '近 30 天暂无 HN 动态'))
                         : heatError ? h('div', { className: 'hud-empty hud-err' }, heatErrorText(heatError)) : h('div', { className: 'hud-empty' }, '聚合中…'))
                       : (q
                         ? feed.map(renderFeedRow)

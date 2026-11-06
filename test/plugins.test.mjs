@@ -15,7 +15,7 @@ function repo(id, name, minutesAgo, stars = 0) {
   };
 }
 
-test('GitHub 插件流只保留 1 小时内有效仓库，按 pushed_at 倒序', async () => {
+test('GitHub 插件流只保留 24 小时内有效仓库，按 pushed_at 倒序', async () => {
   __resetGithubPluginsForTests();
   let calls = 0;
   globalThis.fetch = async () => {
@@ -24,26 +24,29 @@ test('GitHub 插件流只保留 1 小时内有效仓库，按 pushed_at 倒序',
       items: [
         repo(1, 'alice/dsh-older', 45, 3),
         repo(2, 'bob/dsh-newer', 10, 42),
-        repo(3, 'carol/too-old', 120, 5),
-        { id: 4, full_name: 'dave/no-date', html_url: 'https://github.com/dave/no-date', description: 'missing' },
+        repo(3, 'carol/two-hours', 120, 5),
+        repo(4, 'dave/too-old', 30 * 60, 1),
+        { id: 5, full_name: 'eve/no-date', html_url: 'https://github.com/eve/no-date', description: 'missing' },
       ],
     }), { status: 200 });
   };
   const data = await getGithubPlugins({ force: true });
   assert.equal(data.ok, true);
-  assert.equal(data.windowMinutes, 60);
+  assert.equal(data.windowHours, 24);
   assert.equal(data.limit, 30);
-  assert.equal(data.items.length, 2);
+  assert.equal(data.items.length, 3);
   assert.equal(data.items[0].title, 'bob/dsh-newer');
+  assert.equal(data.items[1].title, 'alice/dsh-older');
+  assert.equal(data.items[2].title, 'carol/two-hours');
   assert.equal(data.items[0].stars, 42);
   assert.equal(data.items[0].language, 'TypeScript');
   assert.ok(data.items[0].at > data.items[1].at);
   assert.equal(data.stale, false);
   assert.equal(calls, 1);
-  assert.equal(peekGithubPlugins().items.length, 2);
+  assert.equal(peekGithubPlugins().items.length, 3);
 });
 
-test('1 小时内超过 30 条时只保留最新 30 条', async () => {
+test('24 小时内超过 30 条时只保留最新 30 条', async () => {
   __resetGithubPluginsForTests();
   const items = Array.from({ length: 35 }, (_, index) => repo(100 + index, 'owner/dsh-' + index, index));
   globalThis.fetch = async () => new Response(JSON.stringify({ items }), { status: 200 });
