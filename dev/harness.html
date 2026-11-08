@@ -90,6 +90,7 @@
         }));
       }
       if (isAi) {
+        window.__AI_CALLS = (window.__AI_CALLS || 0) + 1;
         return Promise.resolve(new Response(JSON.stringify({ ok: true, data: window.__AI }), {
           status: 200,
           headers: { 'content-type': 'application/json' },

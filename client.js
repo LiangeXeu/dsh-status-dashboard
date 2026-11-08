@@ -10,7 +10,7 @@
   'use strict';
 
   var PACKAGE = 'dsh-status-dashboard';
-  var VERSION = '0.3.0';
+  var VERSION = '0.3.1';
   var ROUTE_SEGMENT = '/dsh-status-2417';
   var SKIN_KEY = 'dsh.status.skin';
 
@@ -309,6 +309,30 @@
   }
 
   var INTEREST_KEY = 'dsh.status.interests';
+  var AI_AUTO_KEY = 'dsh.status.aiAuto';
+  var AI_CACHE_KEY = 'dsh.status.aiCache.v1';
+  var AI_AUTO_INTERVAL_MS = 30 * 60_000;
+
+  function readAiCache() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(AI_CACHE_KEY) || 'null');
+      if (raw && raw.data && raw.fetchedAt && Date.now() - raw.fetchedAt < 24 * 60 * 60_000) return raw;
+    } catch (error) {}
+    return null;
+  }
+
+  function writeAiCache(data, fetchedAt) {
+    try { localStorage.setItem(AI_CACHE_KEY, JSON.stringify({ data: data, fetchedAt: fetchedAt })); }
+    catch (error) {}
+  }
+
+  function readAiAuto() {
+    try { return localStorage.getItem(AI_AUTO_KEY) === '1'; } catch (error) { return false; }
+  }
+
+  function writeAiAuto(value) {
+    try { localStorage.setItem(AI_AUTO_KEY, value ? '1' : '0'); } catch (error) {}
+  }
 
   function readInterestEntries() {
     try {
@@ -634,11 +658,11 @@
     '.chip{display:inline-flex;align-items:center;gap:4px;height:16px;padding:0 6px;border-radius:4px;border:1px solid var(--h-line);font-size:9px;color:var(--h-dim);letter-spacing:.04em}',
     '.chip i{width:4px;height:4px;border-radius:50%;background:var(--h-ok)}',
     '.chip[data-off="true"] i{background:var(--h-bad)}',
-    '.topic{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:2px 2px;border-bottom:0;cursor:pointer}',
+    '.topic{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:0 2px;border-bottom:0;cursor:pointer}',
     '.topic:last-child{border-bottom:0}',
     '.topic:hover .topic-label{color:var(--h-accent)}',
     '.topic-rank{font-family:inherit;font-size:10px;color:var(--h-mute)}',
-    '.topic-label{font-size:12px;font-weight:600;transition:color .15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.topic-label{font-size:12px;line-height:1.3;font-weight:600;transition:color .15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.topic-sample{font-size:9px;line-height:1.2;color:var(--h-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}',
     '.topic-count{font-family:inherit;font-size:11px;color:var(--h-accent)}',
     '.topic-right{display:flex;align-items:center;gap:4px;justify-content:flex-end}',
@@ -664,6 +688,12 @@
     '.hud-foot i[data-off="true"]{background:var(--h-bad)}',
     '.hud-note{color:var(--h-mute);font-size:9px}',
     '.topic-time{font-size:9px;color:var(--h-mute);font-variant-numeric:tabular-nums;white-space:nowrap}',
+    '.topic-head{gap:6px}',
+    '.topic-tools{margin-left:auto;display:flex;align-items:center;gap:8px}',
+    '.auto-toggle{text-transform:none;height:18px;padding:0 7px;border:1px solid var(--h-line2);border-radius:4px;background:transparent;color:var(--h-dim);font-size:9px;letter-spacing:.04em;cursor:pointer;white-space:nowrap}',
+    '.auto-toggle[data-on="true"]{color:var(--h-accent);border-color:var(--h-accent);background:color-mix(in srgb,var(--h-accent) 12%,transparent)}',
+    '.auto-toggle:hover{color:var(--h-text);border-color:var(--h-accent)}',
+    '.topic-status{flex:1;min-width:0;margin-left:6px;font-size:9px;color:var(--h-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;text-transform:none}',
     '.topic-new{font-size:9px;color:var(--h-accent);border:1px solid var(--h-line2);border-radius:3px;padding:0 3px;line-height:1.4}',
     '.consent-mask{position:absolute;inset:0;z-index:9;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45);backdrop-filter:blur(3px)}',
     '.consent-card{width:min(440px,100%);max-height:82%;overflow:auto;padding:18px;border:1px solid var(--h-line2);border-radius:12px;background:var(--h-bg);box-shadow:0 24px 60px rgba(0,0,0,.45)}',
@@ -729,7 +759,7 @@
     '.cust-foot{display:flex;gap:8px;margin-top:auto;padding-top:10px;border-top:1px solid var(--h-line)}',
     '.cust-note{font-size:9px;line-height:1.55;color:var(--h-mute)}',
     '.topic-sep{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0 1px;padding-top:4px;border-top:1px solid var(--h-line2);font-size:9px;letter-spacing:.12em;color:var(--h-mute);text-transform:uppercase}',
-    '.topic-ai{padding:4px 2px}',
+    '.topic-ai{padding:0 2px}',
     '.topic-star{color:inherit;margin-right:6px;font-size:10px;opacity:1}',
     '.topic-ai .topic-label{font-weight:500;font-size:11px}',
     '.topic-ai .topic-sample{color:var(--h-mute)}',
@@ -812,12 +842,17 @@
     }
 
     function useAiTopics() {
-      var tuple = useState({ data: null, error: null, loading: false, limited: false });
+      var cached = readAiCache();
+      var tuple = useState(function () {
+        return cached
+          ? { data: cached.data, error: null, loading: false, limited: false, fetchedAt: cached.fetchedAt }
+          : { data: null, error: null, loading: false, limited: false, fetchedAt: 0 };
+      });
       var state = tuple[0];
       var setState = tuple[1];
       var abort = useRef(null);
-      var lastOk = useRef(0);
-      var hasData = useRef(false);
+      var lastOk = useRef(cached ? cached.fetchedAt : 0);
+      var hasData = useRef(Boolean(cached));
       var retry = useRef(0);
 
       var load = useCallback(function (seed, force) {
@@ -828,7 +863,7 @@
         var controller = new AbortController();
         abort.current = controller;
         setState(function (prev) {
-          return { data: prev.data, error: null, loading: prev.data === null, limited: false };
+          return { data: prev.data, error: null, loading: prev.data === null, limited: false, fetchedAt: prev.fetchedAt };
         });
         var url = ROUTE_PATH + '/ai-topics?seed=' + encodeURIComponent(String(seed || Date.now()));
         fetch(url, { headers: { accept: 'application/json' }, signal: controller.signal, cache: 'no-store' })
@@ -849,7 +884,8 @@
             if (!payload || payload.ok !== true || !payload.data) throw new Error((payload && payload.error) || '数据格式异常');
             lastOk.current = Date.now();
             hasData.current = true;
-            setState({ data: payload.data, error: null, loading: false, limited: false });
+            writeAiCache(payload.data, lastOk.current);
+            setState({ data: payload.data, error: null, loading: false, limited: false, fetchedAt: lastOk.current });
           })
           .catch(function (error) {
             if (!error || error.name === 'AbortError') return;
@@ -857,9 +893,9 @@
             var limited = error.status === 429 || /频繁/.test(message);
             if (hasData.current) {
               // 有旧结果就保留，别让一次限流把整列话题清空。
-              setState(function (prev) { return { data: prev.data, error: null, loading: false, limited: limited }; });
+              setState(function (prev) { return { data: prev.data, error: null, loading: false, limited: limited, fetchedAt: prev.fetchedAt }; });
             } else {
-              setState({ data: null, error: limited ? '搜索太频繁，稍后自动重试' : message, loading: false, limited: limited });
+              setState({ data: null, error: limited ? '搜索太频繁，稍后自动重试' : message, loading: false, limited: limited, fetchedAt: 0 });
             }
             if (limited) {
               var wait = Math.max(1200, Math.min(5000, Number(error.retryAfterMs) || 3200));
@@ -1284,6 +1320,10 @@
       var onImportPresets = props.onImportPresets;
       var ai = props.ai;
       var plugins = props.plugins;
+      var autoEnabled = props.autoEnabled;
+      var onToggleAuto = props.onToggleAuto;
+      var onAiRefresh = props.onAiRefresh;
+      var aiFetchedAt = props.aiFetchedAt || 0;
       var consentTuple = useState(getConsent());
       var consent = consentTuple[0];
       var setConsentState = consentTuple[1];
@@ -1601,9 +1641,26 @@
             ),
             h('div', { className: 'hud-bottom' },
               h('div', { className: 'p', 'data-mod': 'topics', style: topicsStyle },
-                h('div', { className: 'p-head' },
+                h('div', { className: 'p-head topic-head' },
                   h('b', null, '话题推荐'),
-                  h('span', null, q ? '聚合于 ' + fmtClock(q.fetchedAt) + ' · 7 天时效 · 点开即刷新' + (prefActive ? ' · 本地偏好' : '') : 'TOPICS'),
+                  h('span', {
+                    className: 'topic-status',
+                    title: (q ? '聚合于 ' + fmtClock(q.fetchedAt) + ' · 7 天时效' : 'TOPICS') +
+                      (autoEnabled ? ' · 自动刷新 30 分钟' : ' · 仅手动') +
+                      (prefActive ? ' · 本地偏好' : '') +
+                      (aiFetchedAt ? ' · 搜索于 ' + timeAgo(aiFetchedAt) : ' · 尚未搜索'),
+                  },
+                    q ? fmtClock(q.fetchedAt) + ' · ' + (autoEnabled ? '自动30m' : '仅手动') + (aiFetchedAt ? ' · ' + timeAgo(aiFetchedAt) : '') : 'TOPICS',
+                  ),
+                  h('div', { className: 'topic-tools' },
+                    h('button', {
+                      className: 'auto-toggle', 'data-on': autoEnabled ? 'true' : 'false',
+                      'aria-pressed': autoEnabled ? 'true' : 'false',
+                      title: (autoEnabled ? '已开启：' : '已关闭：') + '30 分钟内重复打开只自动搜索一次；手动刷新不受限',
+                      onClick: onToggleAuto,
+                    }, '自动刷新 ' + (autoEnabled ? '开' : '关')),
+                    h('span', { className: 'dss-link', onClick: onAiRefresh, title: '立即搜索一次（会计费）' }, '刷新'),
+                  ),
                 ),
                 h('div', { className: 'p-body' },
                   heat.state.loading && !q ? h('div', null, h('div', { className: 'hud-skel', style: { width: '45%' } }), h('div', { className: 'hud-skel', style: { width: '70%' } }), h('div', { className: 'hud-skel', style: { width: '55%' } })) : null,
@@ -1662,6 +1719,7 @@
                     );
                   }) : null,
                   !aiLoading && displayItems.length < need ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' } }, '仅 7 天内 · 今日新话题不足') : null,
+                  !aiLoading && !aiData && !autoEnabled ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' } }, '自动刷新关闭 · 点上方“刷新”搜索话题') : null,
                   aiState.limited && aiData ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' } }, '搜索限流 · 暂显示上次结果') : null,
                   aiError && !aiData ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' }, title: aiError },
                     '推荐补充失败',
@@ -1819,6 +1877,9 @@
       var heat = useApi('/heat', false);
       var ai = useAiTopics();
       var plugins = useGithubPlugins();
+      var autoTuple = useState(readAiAuto);
+      var autoEnabled = autoTuple[0];
+      var setAutoEnabled = autoTuple[1];
       var storeTuple = useState(loadCustomStore);
       var store = storeTuple[0];
       var setStore = storeTuple[1];
@@ -1951,8 +2012,11 @@
         setHover(false);
         heat.load(true, true);
         status.load(false);
-        ai.load(Date.now());
-      }, [heat, status, ai]);
+        // 自动刷新关闭时，打开 HUD 不发起任何 AI 搜索；开启后 30 分钟内只允许一次。
+        if (autoEnabled && Date.now() - (ai.state.fetchedAt || 0) >= AI_AUTO_INTERVAL_MS) {
+          ai.load(Date.now());
+        }
+      }, [heat, status, ai, autoEnabled]);
 
       var closeHud = useCallback(function () { setOpen(false); }, []);
 
@@ -1961,6 +2025,15 @@
         heat.load(true, true);
         ai.load(Date.now(), true);
       }, [status, heat, ai]);
+
+      var refreshAi = useCallback(function () { ai.load(Date.now(), true); }, [ai]);
+
+      var toggleAuto = useCallback(function () {
+        var next = !autoEnabled;
+        setAutoEnabled(next);
+        writeAiAuto(next);
+        if (next && Date.now() - (ai.state.fetchedAt || 0) >= AI_AUTO_INTERVAL_MS) ai.load(Date.now());
+      }, [autoEnabled, ai]);
 
       var overall = status.state.data ? status.state.data.overall : 'unknown';
       var label = status.state.data ? statusLabel(overall) : status.state.error ? '状态未知' : '状态…';
@@ -1978,6 +2051,8 @@
         open ? h(Hud, {
           status: status, heat: heat, skin: skin, onSkin: applySkin,
           custom: custom, onCustomChange: updateCustom, ai: ai, plugins: plugins,
+          autoEnabled: autoEnabled, onToggleAuto: toggleAuto, onAiRefresh: refreshAi,
+          aiFetchedAt: ai.state.fetchedAt || 0,
           store: store, activePreset: activePreset,
           onSelectPreset: selectPreset, onCreatePreset: createPreset,
           onDuplicatePreset: duplicatePreset, onDeletePreset: deletePreset,
