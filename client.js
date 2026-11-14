@@ -585,7 +585,7 @@
     '.dss-link:hover{text-decoration:underline}',
 
     '.hud-backdrop{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,4,6,.66);backdrop-filter:blur(4px);-webkit-app-region:no-drag}',
-    '.hud{position:relative;display:flex;flex-direction:column;width:min(1240px,96vw);height:min(880px,calc(100vh - 12px));border-radius:20px;overflow:hidden;border:1px solid var(--h-line2);background:radial-gradient(130% 120% at 0% 0%, var(--h-bg2) 0%, var(--h-bg) 62%);box-shadow:0 28px 70px rgba(0,0,0,.55), var(--h-glow);color:var(--h-text);font-family:"Segoe UI Variable Text","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:12px;line-height:1.45}',
+    '.hud{position:relative;display:flex;flex-direction:column;width:min(1560px,94vw);height:calc(100vh - 24px);max-height:calc(100vh - 24px);border-radius:20px;overflow:hidden;border:1px solid var(--h-line2);background:radial-gradient(130% 120% at 0% 0%, var(--h-bg2) 0%, var(--h-bg) 62%);box-shadow:0 28px 70px rgba(0,0,0,.55), var(--h-glow);color:var(--h-text);font-family:"Segoe UI Variable Text","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:12px;line-height:1.45}',
     '.hud[data-skin="abyss"]{--h-bg:#05090b;--h-bg2:#081619;--h-panel:rgba(9,25,27,.72);--h-panel2:rgba(12,34,36,.55);--h-line:rgba(52,245,197,.14);--h-line2:rgba(52,245,197,.34);--h-text:#dcfff4;--h-dim:#6f9c93;--h-mute:#436a63;--h-accent:#34f5c5;--h-accent2:#39b7ff;--h-ok:#34f5c5;--h-warn:#ffd166;--h-bad:#ff5d7a;--h-partial:#ff8a5c;--h-mag:#b388ff;--h-glow:0 0 18px rgba(52,245,197,.10);--h-radius:16px}',
     '.hud[data-skin="console"]{--h-bg:#0b0803;--h-bg2:#171007;--h-panel:rgba(28,21,9,.8);--h-panel2:rgba(38,29,13,.55);--h-line:rgba(255,180,84,.16);--h-line2:rgba(255,180,84,.4);--h-text:#f6e3c2;--h-dim:#b08a55;--h-mute:#7a5f3a;--h-accent:#ffb454;--h-accent2:#ff7a45;--h-ok:#ffb454;--h-warn:#ffd166;--h-bad:#ff5d5d;--h-partial:#ff7a45;--h-mag:#d0a2ff;--h-glow:0 0 16px rgba(255,180,84,.10);--h-radius:6px}',
     '.hud[data-skin="paper"]{--h-bg:#f2efe7;--h-bg2:#e9e4d8;--h-panel:rgba(255,255,255,.72);--h-panel2:rgba(255,255,255,.5);--h-line:rgba(20,20,20,.12);--h-line2:rgba(20,20,20,.3);--h-text:#141414;--h-dim:#5c574d;--h-mute:#8b8578;--h-accent:#e0004d;--h-accent2:#1b1b1b;--h-ok:#0d7a52;--h-warn:#b06a00;--h-bad:#c2185b;--h-partial:#d9480f;--h-mag:#6b2bd9;--h-glow:0 0 0 rgba(0,0,0,0);--h-radius:4px}',
@@ -616,8 +616,8 @@
     '.kpi[data-tone="warn"] .kpi-value{color:var(--h-warn)}',
     '.kpi[data-tone="bad"] .kpi-value{color:var(--h-bad)}',
     '.hud-body{position:relative;z-index:2;flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding:0 20px 12px}',
-    '.hud-main{display:grid;grid-template-columns:1fr 1.5fr .9fr;gap:10px;flex:.58;min-height:0}',
-    '.hud-bottom{display:grid;grid-template-columns:1.62fr 1fr;gap:10px;flex:1.62;min-height:0}',
+    '.hud-main{display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:10px;flex:1 1 0;min-height:170px}',
+    '.hud-bottom{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1.35 1 0;min-height:0}',
     '.p{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;border:1px solid var(--h-line);border-radius:var(--h-radius);background:var(--h-panel);overflow:hidden}',
     '.p-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px 4px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--h-dim)}',
     '.p-head b{font-weight:600;color:var(--h-text);letter-spacing:.12em}',
@@ -643,7 +643,11 @@
     '.seg{display:inline-flex;border:1px solid var(--h-line);border-radius:6px;overflow:hidden}',
     '.seg button{appearance:none;border:0;background:transparent;color:var(--h-dim);font-size:9px;padding:2px 7px;cursor:pointer}',
     '.seg button[data-on="true"]{background:color-mix(in srgb,var(--h-accent) 30%,transparent);color:var(--h-accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--h-accent) 35%,transparent)}',
-    '.ring-wrap{position:relative;display:flex;align-items:center;justify-content:center;padding:6px 0 2px}',
+    '.heat-ring-slot{flex:1 1 auto;min-height:64px;display:flex;align-items:center;justify-content:center;padding:2px 8px}',
+    '.ring-wrap{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-height:0;min-width:0;aspect-ratio:1/1;max-width:100%;max-height:100%}',
+    '.ring{display:block;width:100%;height:100%;overflow:visible}',
+    '.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}',
+    '.ring-score{font-size:clamp(20px,4.2vh,46px)}',
     '.ring{display:block;outline:none}',
     '.ring-wrap{outline:none}',
     '.ring-center{position:absolute;text-align:center}',
@@ -659,12 +663,14 @@
     '.chip i{width:4px;height:4px;border-radius:50%;background:var(--h-ok)}',
     '.chip[data-off="true"] i{background:var(--h-bad)}',
     '.topic{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:0 2px;border-bottom:0;cursor:pointer}',
-    '.topic-list{display:flex;flex-direction:column;min-height:0}',
-    '.topic-list .topic{box-sizing:border-box;padding:0 6px 0 4px;border-bottom:1px solid color-mix(in srgb,var(--h-line) 35%,transparent);column-gap:10px;min-height:0;height:17px}',
+    '.p[data-mod="topics"] .p-body{display:flex;flex-direction:column;overflow:hidden}',
+    '.p[data-mod="topics"]{min-height:0}',
+    '.topic-list{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;height:100%}',
+    '.topic-list .topic{box-sizing:border-box;padding:0 6px 0 4px;border-bottom:1px solid color-mix(in srgb,var(--h-line) 35%,transparent);column-gap:10px;flex:1 1 0;min-height:15px;max-height:48px}',
     '.topic-list .topic:last-child{border-bottom:0}',
     '.topic-list .topic:hover{background:color-mix(in srgb,var(--h-accent) 8%,transparent)}',
     '.topic-list .topic-sample{display:none}',
-    '.topic-list .topic-label{font-size:11px;line-height:17px;font-weight:500;letter-spacing:.01em}',
+    '.topic-list .topic-label{font-size:11px;line-height:1.25;font-weight:500;letter-spacing:.01em;align-self:center}',
     '.topic-list .topic:not(.topic-ai) .topic-label{font-weight:600}',
     '.topic-list .topic-ai .topic-label{color:var(--h-text)}',
     '.topic-list .topic-time{color:var(--h-mute);white-space:nowrap}',
@@ -781,7 +787,8 @@
     '.topic-ai .topic-label{font-weight:500;font-size:11px}',
     '.topic-ai .topic-sample{color:var(--h-mute)}',
     '.ai-badge{display:inline-block;font-size:9px;letter-spacing:.08em;padding:1px 4px;border:1px solid var(--h-line2);border-radius:3px;color:var(--h-accent)}',
-    '@media (max-height:780px){.hud-top{padding:10px 14px 8px}.hud-kpis{padding:9px 14px;gap:8px}.kpi{padding:7px 9px 6px}.kpi-value{font-size:19px}.hud-body{padding:0 14px 8px;gap:9px}.hud-main{gap:9px}.hud-bottom{gap:9px}.comp-row{padding:2px 0 1px}.comp-name{font-size:10px}.comp-bars{height:4px}.comp-note{display:none}.p-head{padding:7px 10px 4px}.p-body{padding:0 10px 4px}.topic-list .topic{padding:0 6px 0 4px;height:17px}.feed-row{padding:3px 2px}.topic-note{display:block}}',
+    '@media (max-height:820px){.hud-top{padding:8px 14px 6px}.hud-kpis{padding:7px 14px;gap:8px}.kpi{padding:6px 9px 5px}.kpi-value{font-size:18px}.hud-body{padding:0 14px 8px;gap:8px}.hud-main{gap:8px;min-height:150px;flex:.85 1 0}.hud-bottom{gap:8px;flex:1.5 1 0}.comp-row{padding:1px 0}.comp-name{font-size:10px}.comp-bars{height:4px}.comp-note{display:none}.p-head{padding:6px 10px 3px}.p-body{padding:0 8px 3px}.topic-list .topic{padding:0 6px 0 4px;min-height:14px}.feed-row{padding:2px 2px}.topic-note{display:block}.topic-list .topic-label{font-size:10.5px}}',
+    '@media (max-height:660px){.hud-main{min-height:120px;flex:.7 1 0}.hud-bottom{flex:1.7 1 0}.hud-kpis{padding:5px 12px}.kpi-value{font-size:16px}.topic-list .topic{min-height:13px}.topic-list .topic-label{font-size:10px}.comp-row:nth-child(n+5){display:none}}',
     '@media (max-width:900px){.hud-kpis{grid-template-columns:repeat(3,1fr)}.hud-main{grid-template-columns:1fr 1fr}.hud-main .p:last-child{display:none}.hud-bottom{grid-template-columns:1fr}}',
     '@media (prefers-reduced-motion: reduce){.hud *,.hud *:before,.hud *:after{animation:none!important;transition:none!important}.hud-backdrop,.skin-drawer{backdrop-filter:none}}',
   ].join('\n');
@@ -1029,19 +1036,24 @@
     }
 
     function Ring(props) {
-      var size = props.size || 150;
-      var stroke = props.stroke || 9;
       var value = Math.max(0, Math.min(100, Number(props.value) || 0));
-      var r = (size - stroke) / 2;
+      var R = 50;
+      var stroke = 7;
+      var r = R - stroke / 2;
       var c = 2 * Math.PI * r;
       var offset = c * (1 - value / 100);
       return h('div', { className: 'ring-wrap' },
-        h('svg', { className: 'ring', width: size, height: size, viewBox: '0 0 ' + size + ' ' + size },
-          h('circle', { className: 'ring-track', cx: size / 2, cy: size / 2, r: r, fill: 'none', strokeWidth: stroke }),
+        h('svg', {
+          className: 'ring',
+          viewBox: '0 0 100 100',
+          preserveAspectRatio: 'xMidYMid meet',
+          style: { display: 'block', width: '100%', height: '100%' },
+        },
+          h('circle', { className: 'ring-track', cx: R, cy: R, r: r, fill: 'none', strokeWidth: stroke }),
           h('circle', {
-            className: 'ring-bar', cx: size / 2, cy: size / 2, r: r, fill: 'none', strokeWidth: stroke,
+            className: 'ring-bar', cx: R, cy: R, r: r, fill: 'none', strokeWidth: stroke,
             strokeLinecap: 'round', strokeDasharray: c, strokeDashoffset: offset,
-            transform: 'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')',
+            transform: 'rotate(-90 ' + R + ' ' + R + ')',
           }),
         ),
         h('div', { className: 'ring-center' },
@@ -1732,7 +1744,7 @@
               ),
               h('div', { className: 'p', 'data-mod': 'heat', style: heatStyle },
                 h('div', { className: 'p-head' }, h('b', null, '热度'), h('span', null, 'HEAT')),
-                h('div', { style: { opacity: heatError ? 0.35 : 1, display: 'flex', justifyContent: 'center' } }, h(Ring, { value: heatScore, label: q ? q.heat.label : '—' })),
+                h('div', { className: 'heat-ring-slot', style: { opacity: heatError ? 0.35 : 1 } }, h(Ring, { value: heatScore, label: q ? q.heat.label : '—' })),
                 heatError ? h('div', { className: 'hud-empty hud-err', style: { padding: '4px 12px' } }, '接口未加载') : null,
                 h('div', { style: { padding: '0 12px' } },
                   h('div', { className: 'sent' },
