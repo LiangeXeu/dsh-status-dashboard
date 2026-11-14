@@ -21,13 +21,20 @@ Copy-Item "$source\assets" -Destination $target -Recurse -Force
 Copy-Item "$source\docs" -Destination $target -Recurse -Force
 
 $link = Join-Path $profileDir 'node_modules\dsh-status-dashboard'
-if (Test-Path $link) { (Get-Item $link).Delete() }
+if (Test-Path $link) {
+  $item = Get-Item $link -Force
+  if ($item.LinkType -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    cmd /c rmdir "$link" | Out-Null
+  } else {
+    Remove-Item $link -Recurse -Force
+  }
+}
 cmd /c mklink /J "$link" "$target" | Out-Null
 
 $pkgPath = Join-Path $profileDir 'package.json'
 Copy-Item $pkgPath "$pkgPath.bak-status-dashboard" -Force
 $env:STATUS_PKG_PATH = $pkgPath
 $env:STATUS_VERSION = $version
-node -e "const fs=require('fs'); const p=process.env.STATUS_PKG_PATH; const v=process.env.STATUS_VERSION; const pkg=JSON.parse(fs.readFileSync(p,'utf8')); pkg.dependencies=pkg.dependencies||{}; pkg.dependencies['dsh-status-dashboard']='file:../../plugins/dsh-status-dashboard/'+v; const bundles=(pkg.dsh&&pkg.dsh.profile&&pkg.dsh.profile.bundles)||[]; if(!bundles.includes('dsh-status-dashboard')) bundles.push('dsh-status-dashboard'); pkg.dsh=pkg.dsh||{}; pkg.dsh.profile=pkg.dsh.profile||{}; pkg.dsh.profile.bundles=bundles; fs.writeFileSync(p, JSON.stringify(pkg,null,2)+'\n');"
+node -e "const fs=require('fs'); const p=process.env.STATUS_PKG_PATH; const v=process.env.STATUS_VERSION; const raw=fs.readFileSync(p,'utf8').replace(/^\uFEFF/,''); const pkg=JSON.parse(raw); pkg.dependencies=pkg.dependencies||{}; pkg.dependencies['dsh-status-dashboard']='file:../../plugins/dsh-status-dashboard/'+v; const bundles=(pkg.dsh&&pkg.dsh.profile&&pkg.dsh.profile.bundles)||[]; if(!bundles.includes('dsh-status-dashboard')) bundles.push('dsh-status-dashboard'); pkg.dsh=pkg.dsh||{}; pkg.dsh.profile=pkg.dsh.profile||{}; pkg.dsh.profile.bundles=bundles; fs.writeFileSync(p, JSON.stringify(pkg,null,2)+'\n');"
 
 Write-Host "已安装 $version。重启 DSH 后生效。"

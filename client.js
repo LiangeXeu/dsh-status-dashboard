@@ -10,7 +10,7 @@
   'use strict';
 
   var PACKAGE = 'dsh-status-dashboard';
-  var VERSION = '0.3.1';
+  var VERSION = '0.4.0';
   var ROUTE_SEGMENT = '/dsh-status-2417';
   var SKIN_KEY = 'dsh.status.skin';
 
@@ -617,7 +617,7 @@
     '.kpi[data-tone="bad"] .kpi-value{color:var(--h-bad)}',
     '.hud-body{position:relative;z-index:2;flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding:0 20px 12px}',
     '.hud-main{display:grid;grid-template-columns:1fr 1.5fr .9fr;gap:12px;flex:.97;min-height:0}',
-    '.hud-bottom{display:grid;grid-template-columns:1.42fr 1fr;gap:12px;flex:1.12;min-height:0}',
+    '.hud-bottom{display:grid;grid-template-columns:1.72fr 1fr;gap:12px;flex:1.12;min-height:0}',
     '.p{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;border:1px solid var(--h-line);border-radius:var(--h-radius);background:var(--h-panel);overflow:hidden}',
     '.p-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px 4px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--h-dim)}',
     '.p-head b{font-weight:600;color:var(--h-text);letter-spacing:.12em}',
@@ -659,6 +659,17 @@
     '.chip i{width:4px;height:4px;border-radius:50%;background:var(--h-ok)}',
     '.chip[data-off="true"] i{background:var(--h-bad)}',
     '.topic{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:0 2px;border-bottom:0;cursor:pointer}',
+    '.topic-grid{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;grid-template-rows:repeat(10,minmax(0,auto));column-gap:14px;row-gap:0;align-content:start}',
+    '.topic-grid .topic{padding:1px 2px}',
+    '.topic-grid .topic-sample{display:none}',
+    '.topic-grid .topic-label{font-size:11px}',
+    '.topic-grid .topic-rank{font-size:9px}',
+    '.topic-grid .topic-time,.topic-grid .topic-count{font-size:9px}',
+    '.topic-grid .chip{display:none}',
+    '.topic-grid .topic-right{gap:3px;flex:0 0 auto}',
+    '.topic-grid .topic-new{font-size:8px;padding:0 2px}',
+    '.topic-grid .topic-right{gap:4px}',
+    '.topic-grid .chip{max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.topic:last-child{border-bottom:0}',
     '.topic:hover .topic-label{color:var(--h-accent)}',
     '.topic-rank{font-family:inherit;font-size:10px;color:var(--h-mute)}',
@@ -673,6 +684,7 @@
     '.feed-main{min-width:0;flex:1}',
     '.feed-title{font-size:11px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
     '.feed-meta{font-size:9px;color:var(--h-mute);margin-top:2px;display:flex;gap:8px}',
+    '.feed-dot{color:var(--h-line2)}',
     '.feed-head{gap:6px}',
     '.feed-tabs{flex:0 0 auto}',
     '.feed-tabs button{padding:2px 6px}',
@@ -947,6 +959,53 @@
             dataRef.current = payload.data;
             fetchedRef.current = Date.now();
             setState({ data: payload.data, error: null, loading: false, stale: false, fetchedAt: fetchedRef.current });
+          })
+          .catch(function (error) {
+            if (!error || error.name === 'AbortError') return;
+            var message = String(error.message || error);
+            setState(function (prev) {
+              return { data: prev.data, error: prev.data ? null : message, loading: false, stale: Boolean(prev.data), fetchedAt: prev.fetchedAt };
+            });
+          });
+      }, []);
+      useEffect(function () { return function () { if (abort.current) abort.current.abort(); }; }, []);
+      return { state: state, load: load };
+    }
+
+    function useAiFeed() {
+      var tuple = useState({ data: null, error: null, loading: false, stale: false, fetchedAt: 0 });
+      var state = tuple[0];
+      var setState = tuple[1];
+      var abort = useRef(null);
+      var dataRef = useRef(null);
+      var fetchedRef = useRef(0);
+
+      var load = useCallback(function (force) {
+        if (!force && dataRef.current && Date.now() - fetchedRef.current < 5 * 60_000) return;
+        if (abort.current) abort.current.abort();
+        var controller = new AbortController();
+        abort.current = controller;
+        setState(function (prev) {
+          return { data: prev.data, error: null, loading: prev.data === null, stale: prev.stale, fetchedAt: prev.fetchedAt };
+        });
+        fetch(ROUTE_PATH + '/ai-feed' + (force ? '?force=1' : ''), {
+          headers: { accept: 'application/json' },
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+          .then(function (response) {
+            return response.text().then(function (text) {
+              var payload = null;
+              try { payload = JSON.parse(text); } catch (error) { payload = null; }
+              if (!response.ok) throw new Error((payload && payload.error) || ('HTTP ' + response.status));
+              return payload;
+            });
+          })
+          .then(function (payload) {
+            if (!payload || payload.ok !== true || !payload.data) throw new Error((payload && payload.error) || '数据格式异常');
+            dataRef.current = payload.data;
+            fetchedRef.current = Date.now();
+            setState({ data: payload.data, error: null, loading: false, stale: Boolean(payload.data.stale), fetchedAt: fetchedRef.current });
           })
           .catch(function (error) {
             if (!error || error.name === 'AbortError') return;
@@ -1320,6 +1379,8 @@
       var onImportPresets = props.onImportPresets;
       var ai = props.ai;
       var plugins = props.plugins;
+      var aiFeed = props.aiFeed;
+      var aiFeedState = aiFeed ? aiFeed.state : { data: null, error: null, loading: false, stale: false, fetchedAt: 0 };
       var autoEnabled = props.autoEnabled;
       var onToggleAuto = props.onToggleAuto;
       var onAiRefresh = props.onAiRefresh;
@@ -1351,7 +1412,7 @@
       var feedTabTuple = useState(function () {
         try {
           var saved = localStorage.getItem('dsh.status.feedTab');
-          return saved === 'hn' || saved === 'plugins' ? saved : 'all';
+          return saved === 'hn' || saved === 'plugins' || saved === 'media' ? saved : 'all';
         } catch (error) { return 'all'; }
       });
       var feedTab = feedTabTuple[0];
@@ -1362,12 +1423,14 @@
         : [];
       useEffect(function () {
         if (feedTab === 'plugins' && plugins) plugins.load(false);
+        if (feedTab === 'media' && aiFeed) aiFeed.load(false);
       }, [feedTab]);
       var selectFeedTab = useCallback(function (tab) {
         setFeedTab(tab);
         try { localStorage.setItem('dsh.status.feedTab', tab); } catch (error) {}
         if (tab === 'plugins' && plugins) plugins.load(false);
-      }, [plugins]);
+        if (tab === 'media' && aiFeed) aiFeed.load(false);
+      }, [plugins, aiFeed]);
 
       useEffect(function () {
         function onKey(event) {
@@ -1429,7 +1492,8 @@
       var aiData = aiState.data;
       var aiLoading = aiState.loading;
       var aiError = aiState.error;
-      var need = Math.max(0, 10 - topics.length);
+      var TOPIC_TOTAL = 20;
+      var need = Math.max(0, TOPIC_TOTAL - topics.length);
       var aiItems = ((aiData && aiData.items) || []).slice(0, need);
       var usedUrls = new Set();
       var usedTitles = new Set();
@@ -1489,6 +1553,53 @@
         );
       }
 
+      function renderMediaRow(item, index) {
+        var age = Date.now() - item.at;
+        return h('a', {
+          key: item.id || ('media-' + index),
+          className: 'feed-row',
+          href: item.url, target: '_blank', rel: 'noreferrer',
+          onClick: function () { trackRead(item.title); rememberInterest(item.title); },
+        },
+          h('span', { className: 'feed-badge' }, sourceShort(item.sourceName || item.source)),
+          h('div', { className: 'feed-main' },
+            h('div', { className: 'feed-title', title: item.title }, item.title),
+            h('div', { className: 'feed-meta' },
+              h('span', null, timeAgo(item.at)),
+              item.sourceName ? h('span', { className: 'feed-dot' }, '·') : null,
+              item.sourceName ? h('span', null, item.sourceName) : null,
+            ),
+          ),
+        );
+      }
+
+      function renderMediaBody() {
+        if (aiFeedState.loading && !aiFeedState.data) {
+          return Array.from({ length: 6 }).map(function (_, index) {
+            return h('div', { key: 'media-skel-' + index, className: 'feed-row' },
+              h('span', { className: 'feed-badge' }, 'AI'),
+              h('div', { className: 'feed-main' },
+                h('div', { className: 'hud-skel', style: { width: index % 2 ? '58%' : '74%', margin: '4px 0' } }),
+              ),
+            );
+          });
+        }
+        if (aiFeedState.error && !aiFeedState.data) {
+          return h('div', { className: 'hud-empty hud-err' },
+            'AI 媒体源暂不可用',
+            h('span', { className: 'dss-link', style: { marginLeft: '8px' }, onClick: function () { if (aiFeed) aiFeed.load(true); } }, '重试'),
+          );
+        }
+        var data = aiFeedState.data;
+        var items = data && data.items ? data.items.filter(function (item) { return Date.now() - item.at <= 24 * 60 * 60_000; }).slice(0, 30) : [];
+        if (!items.length) return h('div', { className: 'hud-empty' }, '近 24 小时暂无 AI 媒体报道');
+        return h('div', null,
+          h('div', { className: 'feed-range' }, '近 24 小时 · ' + items.length + ' 条 · 上限 30 · 0 API'),
+          aiFeedState.stale ? h('div', { className: 'feed-note' }, '部分源不可用 · 显示上次缓存') : null,
+          items.map(renderMediaRow),
+        );
+      }
+
       function renderPluginBody() {
         if (pluginState.loading && !pluginState.data) {
           return Array.from({ length: 5 }).map(function (_, index) {
@@ -1529,7 +1640,7 @@
               h('button', { className: 'hud-btn', onClick: function () { setPrivacyOpen(true); } }, '隐私'),
               h('button', {
                 className: 'hud-btn',
-                onClick: function () { onRefresh(); if (feedTab === 'plugins' && plugins) plugins.load(true); },
+                onClick: function () { onRefresh(); if (feedTab === 'plugins' && plugins) plugins.load(true); if (feedTab === 'media' && aiFeed) aiFeed.load(true); },
                 disabled: status.state.fetching || heat.state.fetching,
               }, (status.state.fetching || heat.state.fetching) ? '刷新中…' : '刷新'),
               h('button', { className: 'hud-btn hud-close', onClick: onClose, 'aria-label': '关闭' }, '×'),
@@ -1665,59 +1776,65 @@
                 h('div', { className: 'p-body' },
                   heat.state.loading && !q ? h('div', null, h('div', { className: 'hud-skel', style: { width: '45%' } }), h('div', { className: 'hud-skel', style: { width: '70%' } }), h('div', { className: 'hud-skel', style: { width: '55%' } })) : null,
                   heatError ? h('div', { className: 'hud-empty hud-err' }, heatErrorText(heatError)) : null,
-                  q && topics.length === 0 ? h('div', { className: 'hud-empty' }, '暂时没有可推荐的话题') : null,
-                  topics.map(function (topic, index) {
-                    var sampleUrl = topic.sample && topic.sample.url ? topic.sample.url : '';
-                    return h(sampleUrl ? 'a' : 'div', {
-                      key: 'agg-' + topic.label,
-                      className: 'topic',
-                      href: sampleUrl || undefined,
-                      target: sampleUrl ? '_blank' : undefined,
-                      rel: sampleUrl ? 'noreferrer' : undefined,
-                      style: { color: 'inherit', textDecoration: 'none' },
-                      onClick: function () { if (sampleUrl) { trackRead(topic.label); rememberInterest(topic.label); } },
-                    },
-                      h('span', { className: 'topic-rank' }, String(index + 1).padStart(2, '0')),
-                      h('div', { style: { minWidth: 0 } },
-                        h('div', { className: 'topic-label', title: topic.label }, h('span', { className: 'topic-star' }, '★'), topic.label),
-                        h('div', { className: 'topic-sample', title: topic.sample ? topic.sample.title : '' }, topic.sample ? topic.sample.title : '来自公开提及'),
-                      ),
-                      h('div', { className: 'topic-right' },
-                        h('span', { className: 'topic-count' }, '×' + topic.count),
-                        topic.sources.slice(0, 2).map(function (name) {
-                          return h('span', { key: name, className: 'chip', style: { height: '16px', padding: '0 4px' } }, sourceShort(name));
-                        }),
-                      ),
-                    );
-                  }),
-                  displayItems.map(function (item, index) {
-                    return h('a', {
-                      key: item.id, className: 'topic topic-ai',
-                      href: item.url, target: '_blank', rel: 'noreferrer',
-                      style: { color: 'inherit', textDecoration: 'none' },
-                      onClick: function () { trackRead(item.title); rememberInterest(item.title); },
-                    },
-                      h('span', { className: 'topic-rank' }, String(topics.length + index + 1).padStart(2, '0')),
-                      h('div', { style: { minWidth: 0 } },
-                        h('div', { className: 'topic-label', title: item.title }, item.title),
-                        h('div', { className: 'topic-sample', title: item.title }, item.snippet || ''),
-                      ),
-                      h('div', { className: 'topic-right' },
-                        h('span', { className: 'topic-time', title: new Date(item.at).toLocaleString() }, timeAgo(item.at)),
-                        item.at > Date.now() - 86400000 ? h('span', { className: 'topic-new' }, '新') : null,
-                        h('span', { className: 'chip', style: { height: '16px', padding: '0 4px' } }, (item.domain || '').slice(0, 14)),
-                      ),
-                    );
-                  }),
-                  aiLoading ? Array.from({ length: Math.max(0, need - displayItems.length) }).map(function (_, index) {
-                    return h('div', { key: 'ai-skel-' + index, className: 'topic topic-ai' },
-                      h('span', { className: 'topic-rank' }, '··'),
-                      h('div', { style: { minWidth: 0 } },
-                        h('div', { className: 'hud-skel', style: { width: index % 2 ? '52%' : '66%', margin: '5px 0' } }),
-                      ),
-                      h('div', null),
-                    );
-                  }) : null,
+                  q && topics.length === 0 && displayItems.length === 0 ? h('div', { className: 'hud-empty' }, '暂时没有可推荐的话题') : null,
+                  (function () {
+                    var rows = [];
+                    topics.forEach(function (topic, index) {
+                      var sampleUrl = topic.sample && topic.sample.url ? topic.sample.url : '';
+                      rows.push(h(sampleUrl ? 'a' : 'div', {
+                        key: 'agg-' + topic.label,
+                        className: 'topic',
+                        href: sampleUrl || undefined,
+                        target: sampleUrl ? '_blank' : undefined,
+                        rel: sampleUrl ? 'noreferrer' : undefined,
+                        style: { color: 'inherit', textDecoration: 'none' },
+                        onClick: function () { if (sampleUrl) { trackRead(topic.label); rememberInterest(topic.label); } },
+                      },
+                        h('span', { className: 'topic-rank' }, String(index + 1).padStart(2, '0')),
+                        h('div', { style: { minWidth: 0 } },
+                          h('div', { className: 'topic-label', title: topic.label }, h('span', { className: 'topic-star' }, '★'), topic.label),
+                          h('div', { className: 'topic-sample', title: topic.sample ? topic.sample.title : '' }, topic.sample ? topic.sample.title : '来自公开提及'),
+                        ),
+                        h('div', { className: 'topic-right' },
+                          h('span', { className: 'topic-count' }, '×' + topic.count),
+                          topic.sources.slice(0, 2).map(function (name) {
+                            return h('span', { key: name, className: 'chip', style: { height: '16px', padding: '0 4px' } }, sourceShort(name));
+                          }),
+                        ),
+                      ));
+                    });
+                    displayItems.forEach(function (item, index) {
+                      rows.push(h('a', {
+                        key: item.id, className: 'topic topic-ai',
+                        href: item.url, target: '_blank', rel: 'noreferrer',
+                        style: { color: 'inherit', textDecoration: 'none' },
+                        onClick: function () { trackRead(item.title); rememberInterest(item.title); },
+                      },
+                        h('span', { className: 'topic-rank' }, String(topics.length + index + 1).padStart(2, '0')),
+                        h('div', { style: { minWidth: 0 } },
+                          h('div', { className: 'topic-label', title: item.title }, item.title),
+                          h('div', { className: 'topic-sample', title: item.title }, item.snippet || ''),
+                        ),
+                        h('div', { className: 'topic-right' },
+                          h('span', { className: 'topic-time', title: new Date(item.at).toLocaleString() }, timeAgo(item.at)),
+                          item.at > Date.now() - 86400000 ? h('span', { className: 'topic-new' }, '新') : null,
+                          h('span', { className: 'chip', style: { height: '16px', padding: '0 4px' } }, (item.domain || '').slice(0, 14)),
+                        ),
+                      ));
+                    });
+                    if (aiLoading) {
+                      for (var index = displayItems.length; index < need; index += 1) {
+                        rows.push(h('div', { key: 'ai-skel-' + index, className: 'topic topic-ai' },
+                          h('span', { className: 'topic-rank' }, '··'),
+                          h('div', { style: { minWidth: 0 } },
+                            h('div', { className: 'hud-skel', style: { width: index % 2 ? '52%' : '66%', margin: '5px 0' } }),
+                          ),
+                          h('div', null),
+                        ));
+                      }
+                    }
+                    return rows.length ? h('div', { className: 'topic-grid' }, rows) : null;
+                  })(),
                   !aiLoading && displayItems.length < need ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' } }, '仅 7 天内 · 今日新话题不足') : null,
                   !aiLoading && !aiData && !autoEnabled ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' } }, '自动刷新关闭 · 点上方“刷新”搜索话题') : null,
                   aiState.limited && aiData ? h('div', { className: 'topic-note', style: { textAlign: 'left', padding: '4px 2px' } }, '搜索限流 · 暂显示上次结果') : null,
@@ -1731,10 +1848,10 @@
                 h('div', { className: 'p-head feed-head' },
                   h('b', null, '实时信息流'),
                   h('div', { className: 'seg feed-tabs' },
-                    [['all', '全部'], ['hn', 'HN'], ['plugins', 'GitHub']].map(function (tab) {
+                    [['all', '全部'], ['hn', 'HN'], ['plugins', 'GitHub'], ['media', 'AI 媒体']].map(function (tab) {
                       return h('button', {
                         key: tab[0], 'data-on': feedTab === tab[0] ? 'true' : 'false',
-                        title: tab[0] === 'plugins' ? 'DSH 插件更新' : tab[0] === 'hn' ? 'Hacker News 最新' : '全部来源',
+                        title: tab[0] === 'plugins' ? 'DSH 插件更新' : tab[0] === 'hn' ? 'Hacker News 最新' : tab[0] === 'media' ? '全球 AI 媒体报道（RSS · 不计费）' : '全部来源',
                         onClick: function () { selectFeedTab(tab[0]); },
                       }, tab[1]);
                     }),
@@ -1743,12 +1860,16 @@
                     ? h('a', { className: 'hud-link', href: 'https://github.com/topics/dsh-plugin', target: '_blank', rel: 'noreferrer', title: 'GitHub DSH 插件主题' }, 'GitHub →')
                     : feedTab === 'hn'
                       ? h('a', { className: 'hud-link', href: 'https://hn.algolia.com/?q=DeepSeek', target: '_blank', rel: 'noreferrer', title: '在 Hacker News 搜索 DeepSeek' }, 'HN →')
-                      : h('span', { className: 'feed-count' }, q ? q.sources.length + ' 源' : ''),
+                      : feedTab === 'media'
+                        ? h('span', { className: 'feed-count' }, (aiFeedState.data && aiFeedState.data.sources ? aiFeedState.data.sources.filter(function (source) { return source.ok; }).length + ' 源 · 0 API' : 'RSS'))
+                        : h('span', { className: 'feed-count' }, q ? q.sources.length + ' 源' : ''),
                 ),
                 h('div', { className: 'p-body' },
                   feedTab === 'plugins'
                     ? renderPluginBody()
-                    : feedTab === 'hn'
+                    : feedTab === 'media'
+                      ? renderMediaBody()
+                      : feedTab === 'hn'
                       ? (q
                         ? (hnFeed.length ? h('div', null, h('div', { className: 'feed-range' }, '近 30 天 · ' + hnFeed.length + ' 条 · 上限 30'), hnFeed.map(renderFeedRow)) : h('div', { className: 'hud-empty' }, '近 30 天暂无 HN 动态'))
                         : heatError ? h('div', { className: 'hud-empty hud-err' }, heatErrorText(heatError)) : h('div', { className: 'hud-empty' }, '聚合中…'))
@@ -1877,6 +1998,7 @@
       var heat = useApi('/heat', false);
       var ai = useAiTopics();
       var plugins = useGithubPlugins();
+    var aiFeed = useAiFeed();
       var autoTuple = useState(readAiAuto);
       var autoEnabled = autoTuple[0];
       var setAutoEnabled = autoTuple[1];
@@ -2050,7 +2172,7 @@
         hover && !open ? h(HoverCard, { status: status.state, heat: heat.state, onOpen: openHud, skin: skin, custom: custom }) : null,
         open ? h(Hud, {
           status: status, heat: heat, skin: skin, onSkin: applySkin,
-          custom: custom, onCustomChange: updateCustom, ai: ai, plugins: plugins,
+          custom: custom, onCustomChange: updateCustom, ai: ai, plugins: plugins, aiFeed: aiFeed,
           autoEnabled: autoEnabled, onToggleAuto: toggleAuto, onAiRefresh: refreshAi,
           aiFetchedAt: ai.state.fetchedAt || 0,
           store: store, activePreset: activePreset,

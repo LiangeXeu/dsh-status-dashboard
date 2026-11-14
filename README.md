@@ -6,6 +6,28 @@ DeepSeek 运行与热度仪表盘：标题栏右侧一枚按钮，点开是三�
 
 ![深渊皮肤](docs/skin-abyss.png)
 
+## 0.4.0（全球视野 + 话题翻倍）
+
+### 话题推荐：10 → 20 条，成本不变
+- 单次搜索请求 `count` 从 20 提到 40，**一次付费拿满候选**，排序后取 20 条；
+- 以前是「请求 20 条 → 只显示 10 条」，等于扔掉一半已付费结果，现在全部用上；
+- 只有候选不足 16 条时才补第二次请求，正常一次就够，**不会翻倍计费**。
+
+### 话题范围：DeepSeek → 全球 AI
+- 角度池换成全球视角：AI 行业动态、Anthropic/Claude 政策、OpenAI 发布、AI 芯片算力、AI 监管立法、开源权重、Agent 落地、融资 IPO、安全对齐、Gemini/Llama；
+- **DeepSeek 保留 3 条配额**，其余 17 条给全球 AI 新闻；全球不足时才用 DeepSeek 补齐，不浪费已付费结果；
+- 热度指数、声量、情绪仍只统计 DeepSeek 相关条目，口径不变。
+
+### 信息流：新增「AI 媒体」tab
+- 右侧信息流从 `全部 / HN / GitHub` 变成 `全部 / HN / GitHub / AI 媒体`；
+- AI 媒体聚合 **25 个主流 AI 媒体 RSS**（TechCrunch、The Verge、Wired、MIT Tech Review、IEEE Spectrum、ZDNet、AI Business、The Decoder、Ars Technica、Google AI、DeepMind、OpenAI、Techmeme、IT之家、InfoQ、量子位、爱范儿、雷锋网、钛媒体、极客公园等）；
+- 窗口 **近 24 小时 · 上限 30 条**，与 GitHub 同口径；单源最多 4 条，防止高产源刷屏；
+- **纯 RSS，0 API 成本**；10 分钟缓存，15 秒内并发抓完；
+- 与热度层完全隔离：这些条目只进 AI 媒体流，不参与 DeepSeek 的声量与热度计算。
+
+### 布局
+- 话题列表改为**双列网格**，20 条一屏显示完，不用滚动。
+
 ## 0.3.1（AI 搜索成本控制）
 
 - **话题推荐新增“自动刷新 开/关”**：默认关闭；

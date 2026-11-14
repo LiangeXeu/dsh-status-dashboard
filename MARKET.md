@@ -1,4 +1,4 @@
-# 上架清单（0.3.1）
+# 上架清单（0.4.0）
 
 这份文件是给插件市场/仓库发布用的检查表，不参与运行时加载。
 
@@ -7,7 +7,7 @@
 | 字段 | 值 | 状态 |
 | --- | --- | --- |
 | name | `dsh-status-dashboard` | ✅ |
-| version | `0.3.1` | ⏳ 待测试后发布 |
+| version | `0.4.0` | ⏳ 待测试后发布 |
 | description | 中文一句话，见 package.json | ✅ |
 | icon | `assets/icon.svg`（64×64，346 B） | ✅ |
 | license | 自定义：DSH 仪表盘署名许可 1.0（`LICENSE`，非 OSI 开源） | ✅ |
@@ -36,6 +36,8 @@
 | `docs/custom-skin.png` | 自定义背景效果 |
 | `docs/feed-github.png` | GitHub 插件流 |
 | `docs/auto-refresh.png` | AI 自动刷新开关 |
+| `docs/topics-20.png` | 20 条话题双列 |
+| `docs/ai-media.png` | AI 媒体信息流 |
 | `docs/hover-card.png` | 标题栏悬停卡 |
 | `docs/ai-topics.png` | 聚合 + AI 搜索话题 |
 
